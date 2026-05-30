@@ -1,0 +1,126 @@
+<template>
+  <AppLayout>
+    <div v-if="gigStore.loading" class="text-center py-16 text-gray-400">Loading gig…</div>
+
+    <div v-else-if="gig" class="max-w-5xl mx-auto">
+      <!-- Gig header -->
+      <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
+        <div>
+          <RouterLink to="/dashboard" class="text-sm text-gray-400 hover:text-white inline-flex items-center gap-1 mb-2">
+            ← Dashboard
+          </RouterLink>
+          <h1 class="text-2xl font-bold">{{ gig.name }}</h1>
+          <p v-if="gig.description" class="text-gray-400 text-sm mt-1">{{ gig.description }}</p>
+        </div>
+        <div class="flex flex-wrap gap-2 items-center">
+          <!-- Invite code badge -->
+          <button
+            class="flex items-center gap-2 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm hover:border-brand-500 transition-colors"
+            @click="copyInviteLink"
+            title="Copy invite link"
+          >
+            <span class="font-mono text-brand-400">{{ gig.invite_code }}</span>
+            <span class="text-gray-400 text-xs">{{ copied ? '✓ Copied' : '📋 Copy Link' }}</span>
+          </button>
+
+          <!-- Status -->
+          <span class="text-xs px-2 py-1 rounded-full"
+            :class="gig.status === 'open' ? 'bg-green-900 text-green-300' : 'bg-gray-700 text-gray-300'"
+          >
+            {{ gig.status === 'open' ? '🟢 Voting Open' : '🔴 Closed' }}
+          </span>
+
+          <!-- Owner controls -->
+          <template v-if="isOwner">
+            <button v-if="gig.status === 'open'" class="btn-danger text-sm" @click="closeVoting">Close Voting</button>
+            <RouterLink v-if="gig.status === 'closed'" :to="`/gigs/${gig.id}/summary`" class="btn-primary text-sm">View Summary</RouterLink>
+          </template>
+          <template v-else>
+            <RouterLink v-if="gig.status === 'closed'" :to="`/gigs/${gig.id}/summary`" class="btn-secondary text-sm">View Summary</RouterLink>
+          </template>
+        </div>
+      </div>
+
+      <!-- Two-column layout -->
+      <div class="grid lg:grid-cols-3 gap-6">
+        <!-- Song list (left / main) -->
+        <div class="lg:col-span-2 space-y-4">
+          <!-- Add Song -->
+          <AddSongPanel :gig-id="gigId" />
+
+          <!-- Songs -->
+          <div v-if="songStore.loading" class="text-center py-8 text-gray-400">Loading songs…</div>
+          <div v-else-if="!songs.length" class="card text-center py-10 text-gray-400">
+            <div class="text-4xl mb-3">🎵</div>
+            <p>No songs yet. Search and add songs above.</p>
+          </div>
+          <SongCard
+            v-else
+            v-for="song in songs"
+            :key="song.id"
+            :song="song"
+            :voting-open="gig.status === 'open'"
+          />
+        </div>
+
+        <!-- Sidebar (right) -->
+        <div class="space-y-4">
+          <!-- Members + Naughty List -->
+          <NaughtyList :gig="gig" :songs="songs" />
+        </div>
+      </div>
+    </div>
+
+    <div v-else class="text-center py-16 text-gray-400">Gig not found.</div>
+  </AppLayout>
+</template>
+
+<script setup>
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { useRoute, RouterLink } from 'vue-router'
+import { storeToRefs } from 'pinia'
+import AppLayout from '../components/AppLayout.vue'
+import AddSongPanel from '../components/AddSongPanel.vue'
+import SongCard from '../components/SongCard.vue'
+import NaughtyList from '../components/NaughtyList.vue'
+import { useGigStore } from '../stores/gigs'
+import { useSongStore } from '../stores/songs'
+import { useAuthStore } from '../stores/auth'
+
+const route = useRoute()
+const gigId = route.params.id
+
+const gigStore = useGigStore()
+const songStore = useSongStore()
+const authStore = useAuthStore()
+
+const { currentGig: gig } = storeToRefs(gigStore)
+const { songs } = storeToRefs(songStore)
+
+const copied = ref(false)
+
+const isOwner = computed(() => gig.value?.owner_id === authStore.user?.id)
+
+onMounted(async () => {
+  await gigStore.fetchGig(gigId)
+  await songStore.fetchSongs(gigId)
+  songStore.subscribeToGig(gigId)
+})
+
+onBeforeUnmount(() => {
+  songStore.unsubscribe()
+})
+
+async function copyInviteLink() {
+  const url = `${window.location.origin}/join?code=${gig.value.invite_code}`
+  await navigator.clipboard.writeText(url).catch(() => {})
+  copied.value = true
+  setTimeout(() => (copied.value = false), 2000)
+}
+
+async function closeVoting() {
+  if (confirm('Close voting? Members will no longer be able to cast votes.')) {
+    await gigStore.updateGigStatus(gigId, 'closed')
+  }
+}
+</script>
