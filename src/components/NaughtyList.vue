@@ -9,7 +9,13 @@
         class="flex items-center justify-between text-sm"
       >
         <div class="flex items-center gap-2">
-          <div class="w-7 h-7 rounded-full bg-brand-900 flex items-center justify-center text-xs font-bold text-brand-400">
+          <img
+            v-if="member.avatar_url"
+            :src="member.avatar_url"
+            alt="Member avatar"
+            class="w-7 h-7 rounded-full object-cover"
+          />
+          <div v-else class="w-7 h-7 rounded-full bg-brand-900 flex items-center justify-center text-xs font-bold text-brand-400">
             {{ (member.display_name || 'A')[0].toUpperCase() }}
           </div>
           <span>{{ member.display_name || 'Unknown' }}</span>
@@ -42,27 +48,38 @@
     </div>
 
     <!-- All done message -->
-    <div v-else-if="memberList.length > 0" class="border-t border-gray-700 pt-3 text-xs text-green-400">
+    <div v-else-if="memberList.length > 0 && totalSongs > 0" class="border-t border-gray-700 pt-3 text-xs text-green-400">
       🎉 Everyone has voted!
     </div>
 
     <!-- Invite code reminder -->
     <div class="border-t border-gray-700 pt-3 mt-3">
-      <p class="text-xs text-gray-500 mb-1">Share invite code:</p>
-      <div class="font-mono text-brand-400 text-lg tracking-widest font-bold text-center py-2 bg-gray-800 rounded-lg">
-        {{ gig.invite_code }}
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-xs text-gray-500">Share invite code:</p>
+        <button class="text-xs text-gray-400 hover:text-white transition-colors" @click="copyInviteLink">
+          {{ copied ? 'Copied code' : 'Copy code' }}
+        </button>
       </div>
+      <button
+        class="w-full font-mono text-brand-400 text-lg tracking-widest font-bold text-center py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
+        @click="copyInviteLink"
+        title="Copy invite link"
+      >
+        {{ gig.invite_code }}
+      </button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 const props = defineProps({
   gig: { type: Object, required: true },
   songs: { type: Array, default: () => [] },
 })
+
+const copied = ref(false)
 
 const totalSongs = computed(() => props.songs.length)
 
@@ -74,6 +91,7 @@ const memberList = computed(() => {
     return {
       user_id: m.user_id,
       display_name: m.profiles?.display_name,
+      avatar_url: m.profiles?.avatar_url,
       role: m.role,
       votedCount,
       hasVotedAll: totalSongs.value > 0 && votedCount === totalSongs.value,
@@ -85,4 +103,10 @@ const memberList = computed(() => {
 const naughtyList = computed(() =>
   memberList.value.filter((m) => m.votedCount < totalSongs.value)
 )
+
+async function copyInviteLink() {
+  await navigator.clipboard.writeText(props.gig.invite_code).catch(() => {})
+  copied.value = true
+  setTimeout(() => (copied.value = false), 3000)
+}
 </script>

@@ -29,6 +29,23 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
+-- Keep profiles.display_name synchronized with auth.users metadata updates
+create or replace function public.handle_auth_user_updated()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  update public.profiles
+  set display_name = new.raw_user_meta_data->>'display_name',
+      updated_at = now()
+  where id = new.id;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_updated on auth.users;
+create trigger on_auth_user_updated
+  after update of raw_user_meta_data on auth.users
+  for each row execute procedure public.handle_auth_user_updated();
+
 -- RLS: users can read all profiles (needed for displaying member names)
 create policy "Profiles are viewable by authenticated users"
   on public.profiles for select
@@ -56,18 +73,6 @@ create table if not exists public.gigs (
 alter table public.gigs enable row level security;
 
 -- RLS
-create policy "Gig members can view their gigs"
-  on public.gigs for select
-  to authenticated
-  using (
-    exists (
-      select 1 from public.gig_members
-      where gig_members.gig_id = gigs.id
-        and gig_members.user_id = auth.uid()
-    )
-    or invite_code is not null  -- allow lookup by invite_code to join
-  );
-
 create policy "Authenticated users can create gigs"
   on public.gigs for insert
   to authenticated
@@ -89,7 +94,7 @@ create policy "Owners can delete gigs"
 create table if not exists public.gig_members (
   id       uuid primary key default gen_random_uuid(),
   gig_id   uuid not null references public.gigs(id) on delete cascade,
-  user_id  uuid not null references auth.users(id) on delete cascade,
+  user_id  uuid not null references public.profiles(id) on delete cascade,
   role     text not null default 'member' check (role in ('owner', 'member')),
   joined_at timestamptz default now() not null,
   unique(gig_id, user_id)
@@ -97,16 +102,28 @@ create table if not exists public.gig_members (
 
 alter table public.gig_members enable row level security;
 
+-- Helper to check membership without triggering RLS recursion on gig_members
+create or replace function public.is_gig_member(target_gig_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1
+    from public.gig_members
+    where gig_id = target_gig_id
+      and user_id = auth.uid()
+  );
+$$;
+
 create policy "Members can view all members of their gigs"
   on public.gig_members for select
   to authenticated
   using (
     user_id = auth.uid()
-    or exists (
-      select 1 from public.gig_members gm2
-      where gm2.gig_id = gig_members.gig_id
-        and gm2.user_id = auth.uid()
-    )
+    or public.is_gig_member(gig_members.gig_id)
   );
 
 create policy "Authenticated users can join gigs"
@@ -118,6 +135,19 @@ create policy "Members can leave gigs"
   on public.gig_members for delete
   to authenticated
   using (user_id = auth.uid());
+
+-- Now that public.gig_members exists, create gigs select policy
+create policy "Gig members can view their gigs"
+  on public.gigs for select
+  to authenticated
+  using (
+    exists (
+      select 1 from public.gig_members
+      where gig_members.gig_id = gigs.id
+        and gig_members.user_id = auth.uid()
+    )
+    or invite_code is not null  -- allow lookup by invite_code to join
+  );
 
 -- =========================================
 -- SONGS
@@ -274,7 +304,7 @@ create policy "Users can remove their own reactions"
 create table if not exists public.comments (
   id       uuid primary key default gen_random_uuid(),
   song_id  uuid not null references public.songs(id) on delete cascade,
-  user_id  uuid not null references auth.users(id) on delete cascade,
+  user_id  uuid not null references public.profiles(id) on delete cascade,
   body     text not null,
   created_at timestamptz default now() not null
 );

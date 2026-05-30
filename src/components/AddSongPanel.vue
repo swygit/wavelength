@@ -7,10 +7,34 @@
       <button
         v-for="src in sources"
         :key="src.id"
-        class="flex-1 py-1.5 text-xs font-medium rounded transition-colors"
+        class="flex-1 py-1.5 text-xs font-medium rounded transition-colors flex items-center justify-center gap-1.5"
         :class="activeSource === src.id ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-white'"
         @click="activeSource = src.id"
       >
+        <svg
+          v-if="src.id === 'spotify'"
+          viewBox="0 0 24 24"
+          class="w-4 h-4"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
+          <path d="M7.5 10.2C10.8 9.2 13.8 9.4 16.7 10.7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+          <path d="M8.2 13.1C10.7 12.4 13 12.5 15.2 13.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          <path d="M8.9 15.7C10.6 15.2 12.1 15.3 13.6 15.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+        </svg>
+        <svg
+          v-else
+          viewBox="0 0 24 24"
+          class="w-4 h-4"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
+          <rect x="3" y="6" width="18" height="12" rx="3" fill="currentColor" />
+          <path d="M10 9.5L15 12L10 14.5V9.5Z" fill="#0f172a" />
+        </svg>
         {{ src.label }}
       </button>
     </div>
@@ -68,8 +92,8 @@ const props = defineProps({ gigId: { type: String, required: true } })
 const songStore = useSongStore()
 
 const sources = [
-  { id: 'spotify', label: '🎵 Spotify' },
-  { id: 'youtube', label: '▶ YouTube' },
+  { id: 'spotify', label: 'Spotify' },
+  { id: 'youtube', label: 'YouTube' },
 ]
 
 const activeSource = ref('spotify')

@@ -27,3 +27,19 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+
+# Supabase
+.supabase
+supabase/.env
+supabase/.env.local
+
+# IDE
+.vscode/settings.json
+.vscode/launch.json
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log

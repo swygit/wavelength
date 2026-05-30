@@ -5,7 +5,7 @@
         ← Back to Dashboard
       </RouterLink>
       <div class="card mt-4">
-        <h1 class="text-xl font-bold mb-2">Join a Gig</h1>
+        <h1 class="text-xl font-bold mb-2">Join a gig</h1>
         <p class="text-gray-400 text-sm mb-6">Enter the 6-character invite code shared by the gig organizer.</p>
         <div v-if="error" class="bg-red-900/50 border border-red-700 text-red-300 rounded-lg px-4 py-3 mb-4 text-sm">{{ error }}</div>
         <form @submit.prevent="handleJoin" class="space-y-4">
@@ -18,7 +18,7 @@
             required
           />
           <button type="submit" class="btn-primary w-full" :disabled="loading">
-            {{ loading ? 'Joining…' : 'Join Gig' }}
+            {{ loading ? 'Joining…' : 'Join gig' }}
           </button>
         </form>
       </div>

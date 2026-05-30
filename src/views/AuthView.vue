@@ -35,11 +35,11 @@
         <form v-if="tab === 'login'" @submit.prevent="handleLogin" class="space-y-4">
           <div>
             <label class="block text-sm text-gray-300 mb-1">Email</label>
-            <input v-model="form.email" type="email" class="input-field" placeholder="you@band.com" required />
+            <input v-model="form.email" type="email" class="input-field" placeholder="Your email address" required />
           </div>
           <div>
             <label class="block text-sm text-gray-300 mb-1">Password</label>
-            <input v-model="form.password" type="password" class="input-field" placeholder="••••••••" required />
+            <input v-model="form.password" type="password" class="input-field" placeholder="Your password" required />
           </div>
           <button type="submit" class="btn-primary w-full" :disabled="loading">
             {{ loading ? 'Signing in…' : 'Sign In' }}
@@ -49,16 +49,12 @@
         <!-- Sign Up form -->
         <form v-else @submit.prevent="handleSignUp" class="space-y-4">
           <div>
-            <label class="block text-sm text-gray-300 mb-1">Display Name</label>
-            <input v-model="form.displayName" type="text" class="input-field" placeholder="Your name" required />
-          </div>
-          <div>
             <label class="block text-sm text-gray-300 mb-1">Email</label>
-            <input v-model="form.email" type="email" class="input-field" placeholder="you@band.com" required />
+            <input v-model="form.email" type="email" class="input-field" placeholder="Your email address" required />
           </div>
           <div>
             <label class="block text-sm text-gray-300 mb-1">Password</label>
-            <input v-model="form.password" type="password" class="input-field" placeholder="Min 6 characters" required minlength="6" />
+            <input v-model="form.password" type="password" class="input-field" placeholder="Your password" required minlength="6" />
           </div>
           <button type="submit" class="btn-primary w-full" :disabled="loading">
             {{ loading ? 'Creating account…' : 'Create Account' }}
@@ -67,7 +63,7 @@
 
         <!-- Email confirmation notice -->
         <div v-if="signedUp" class="mt-4 bg-green-900/50 border border-green-700 text-green-300 rounded-lg px-4 py-3 text-sm">
-          Check your email to confirm your account, then sign in.
+          Success! Account created successfully.
         </div>
       </div>
     </div>
@@ -88,7 +84,7 @@ const loading = ref(false)
 const error = ref(null)
 const signedUp = ref(false)
 
-const form = reactive({ email: '', password: '', displayName: '' })
+const form = reactive({ email: '', password: '' })
 
 async function handleLogin() {
   loading.value = true
@@ -108,9 +104,12 @@ async function handleSignUp() {
   loading.value = true
   error.value = null
   try {
-    await authStore.signUp(form.email, form.password, form.displayName)
+    await authStore.signUp(form.email, form.password)
     signedUp.value = true
     tab.value = 'login'
+    setTimeout(() => {
+      signedUp.value = false
+    }, 3000)
   } catch (e) {
     error.value = e.message
   } finally {

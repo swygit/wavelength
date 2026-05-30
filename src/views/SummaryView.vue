@@ -1,17 +1,17 @@
 <template>
   <AppLayout>
-    <div v-if="loading" class="text-center py-16 text-gray-400">Loading summary…</div>
+    <AppLoading v-if="loading" />
 
     <div v-else-if="gig" class="max-w-3xl mx-auto">
       <div class="flex items-center justify-between mb-6">
         <div>
           <RouterLink :to="`/gigs/${gigId}`" class="text-sm text-gray-400 hover:text-white inline-flex items-center gap-1 mb-2">
-            ← Back to Gig
+            ← Back to gig
           </RouterLink>
           <h1 class="text-2xl font-bold">Final Setlist</h1>
           <p class="text-gray-400 text-sm mt-1">{{ gig.name }}</p>
         </div>
-        <span class="text-xs px-2 py-1 rounded-full bg-gray-700 text-gray-300">Voting Closed</span>
+        <span class="text-xs px-2 py-1 rounded-full bg-red-900 text-red-300">Voting Closed</span>
       </div>
 
       <!-- Ranked songs -->
@@ -59,7 +59,13 @@
         <div class="divide-y divide-gray-700">
           <div v-for="member in memberStats" :key="member.user_id" class="flex items-center justify-between py-3">
             <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-full bg-brand-900 flex items-center justify-center text-sm font-bold text-brand-400">
+              <img
+                v-if="member.avatar_url"
+                :src="member.avatar_url"
+                alt="Member avatar"
+                class="w-8 h-8 rounded-full object-cover"
+              />
+              <div v-else class="w-8 h-8 rounded-full bg-brand-900 flex items-center justify-center text-sm font-bold text-brand-400">
                 {{ (member.display_name || 'A')[0].toUpperCase() }}
               </div>
               <span class="text-sm">{{ member.display_name || 'Unknown' }}</span>
@@ -81,6 +87,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import AppLayout from '../components/AppLayout.vue'
+import AppLoading from '../components/AppLoading.vue'
 import { useGigStore } from '../stores/gigs'
 import { useSongStore } from '../stores/songs'
 import { supabase } from '../lib/supabase'
@@ -110,6 +117,7 @@ const memberStats = computed(() => {
     return {
       user_id: m.user_id,
       display_name: m.profiles?.display_name,
+      avatar_url: m.profiles?.avatar_url,
       votedCount: votedSongs.length,
     }
   })

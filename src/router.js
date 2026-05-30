@@ -13,8 +13,18 @@ const routes = [
     meta: { requiresGuest: true },
   },
   {
+    path: '/onboarding',
+    component: () => import('./views/OnboardingView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/dashboard',
     component: () => import('./views/DashboardView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/profile',
+    component: () => import('./views/ProfileView.vue'),
     meta: { requiresAuth: true },
   },
   {
@@ -71,6 +81,14 @@ router.beforeEach(async (to) => {
   }
   if (to.meta.requiresGuest && authStore.isAuthenticated) {
     return { path: '/dashboard' }
+  }
+  // Redirect to onboarding if authenticated but profile not yet set up
+  if (
+    authStore.isAuthenticated &&
+    !authStore.profile?.display_name &&
+    to.path !== '/onboarding'
+  ) {
+    return { path: '/onboarding' }
   }
 })
 

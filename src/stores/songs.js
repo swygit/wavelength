@@ -10,19 +10,22 @@ export const useSongStore = defineStore('songs', () => {
 
   async function fetchSongs(gigId) {
     loading.value = true
-    const { data, error } = await supabase
-      .from('songs')
-      .select(`
-        *,
-        votes(id, user_id, value),
-        reactions(id, user_id, emoji),
-        comments(id, user_id, body, created_at, profiles(display_name, avatar_url))
-      `)
-      .eq('gig_id', gigId)
-      .order('created_at', { ascending: true })
-    if (error) throw error
-    songs.value = (data ?? []).map(enrichSong)
-    loading.value = false
+    try {
+      const { data, error } = await supabase
+        .from('songs')
+        .select(`
+          *,
+          votes(id, user_id, value),
+          reactions(id, user_id, emoji),
+          comments(id, user_id, body, created_at, profiles(display_name, avatar_url))
+        `)
+        .eq('gig_id', gigId)
+        .order('created_at', { ascending: true })
+      if (error) throw error
+      songs.value = (data ?? []).map(enrichSong)
+    } finally {
+      loading.value = false
+    }
   }
 
   async function addSong(gigId, songData) {

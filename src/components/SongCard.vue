@@ -24,6 +24,24 @@
             <div class="font-semibold truncate">{{ song.title }}</div>
             <div class="text-sm text-gray-400 truncate">{{ song.artist }}</div>
             <div class="text-xs text-gray-500 truncate">{{ song.album }}</div>
+            <div class="mt-1">
+              <span v-if="song.source === 'spotify'" class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-green-900/60 text-green-300">
+                <svg viewBox="0 0 24 24" class="w-3 h-3" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
+                  <path d="M7.5 10.2C10.8 9.2 13.8 9.4 16.7 10.7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+                  <path d="M8.2 13.1C10.7 12.4 13 12.5 15.2 13.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                  <path d="M8.9 15.7C10.6 15.2 12.1 15.3 13.6 15.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                </svg>
+                Spotify
+              </span>
+              <span v-else-if="song.source === 'youtube'" class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-red-900/60 text-red-300">
+                <svg viewBox="0 0 24 24" class="w-3 h-3" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <rect x="3" y="6" width="18" height="12" rx="3" fill="currentColor" />
+                  <path d="M10 9.5L15 12L10 14.5V9.5Z" fill="#0f172a" />
+                </svg>
+                YouTube
+              </span>
+            </div>
           </div>
 
           <!-- Score badge -->
