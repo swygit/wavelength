@@ -1,4 +1,20 @@
 <template>
+  <!-- Full-screen saving overlay -->
+  <Transition name="fade">
+    <div v-if="saving" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-950 gap-6">
+      <span class="text-7xl animate-bounce">🎵</span>
+      <div class="flex flex-col items-center gap-2">
+        <p class="text-xl font-semibold text-white">Setting up your profile…</p>
+        <p class="text-sm text-gray-400">Just a moment, {{ displayName }}...</p>
+      </div>
+      <div class="flex gap-1.5 mt-2">
+        <span class="w-2 h-2 rounded-full bg-brand-500 animate-pulse" style="animation-delay: 0ms"></span>
+        <span class="w-2 h-2 rounded-full bg-brand-500 animate-pulse" style="animation-delay: 150ms"></span>
+        <span class="w-2 h-2 rounded-full bg-brand-500 animate-pulse" style="animation-delay: 300ms"></span>
+      </div>
+    </div>
+  </Transition>
+
   <div class="min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-md">
       <div class="text-center mb-8">
@@ -57,7 +73,7 @@
           </div>
 
           <button type="submit" class="btn-primary w-full" :disabled="saving">
-            {{ saving ? 'Saving…' : 'Get started' }}
+            Get started
           </button>
         </form>
       </div>
@@ -96,38 +112,49 @@ async function handleSave() {
   saving.value = true
   error.value = null
   try {
-    const saveTask = (async () => {
-      const updates = { display_name: displayName.value.trim() }
+    const finalDisplayName = displayName.value.trim()
+    await authStore.updateProfile({ display_name: finalDisplayName })
 
-      if (avatarFile.value) {
-        updates.avatar_url = await authStore.uploadAvatar(avatarFile.value)
-      }
-
-      return authStore.updateProfile(updates)
-    })()
-
-    // Prevent long-running uploads from leaving the user on a perpetual spinner.
-    const outcome = await Promise.race([
-      saveTask.then((result) => ({ timedOut: false, result })),
-      new Promise((resolve) => setTimeout(() => resolve({ timedOut: true }), 3000)),
-    ])
-
-    if (outcome.timedOut) {
-      saveTask.catch((e) => {
-        console.error('Background onboarding save error:', e)
-      })
-      router.push('/dashboard')
-      return
+    // Keep local state aligned so route guards can pass immediately.
+    authStore.profile = {
+      ...(authStore.profile || {}),
+      display_name: finalDisplayName,
     }
 
-    if (outcome.result?.warning) {
-      error.value = `Saved, but Auth profile sync is delayed: ${outcome.result.warning}`
+    // Avatar upload is optional; do it in the background so onboarding feels instant.
+    if (avatarFile.value) {
+      authStore
+        .uploadAvatar(avatarFile.value)
+        .then((avatarUrl) => authStore.updateProfile({ avatar_url: avatarUrl }))
+        .catch((e) => {
+          console.warn('Background avatar upload failed:', e)
+        })
     }
-    router.push('/dashboard')
+
+    // Refresh profile in the background without blocking navigation.
+    authStore.fetchProfile().catch((e) => {
+      console.warn('Background profile refresh failed:', e)
+    })
+
+    try {
+      sessionStorage.setItem('wavelength.justOnboarded', '1')
+    } catch {
+      // Ignore storage issues; navigation should still continue.
+    }
+
+    window.location.href = '/dashboard'
   } catch (e) {
     error.value = e.message
-  } finally {
     saving.value = false
   }
 }
 </script>
+
+<style scoped>
+.fade-enter-active {
+  transition: opacity 0.25s ease;
+}
+.fade-enter-from {
+  opacity: 0;
+}
+</style>

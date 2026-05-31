@@ -34,15 +34,39 @@ export const useAuthStore = defineStore('auth', () => {
   async function fetchProfile() {
     if (!user.value) return
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.value.id)
-        .single()
+        .maybeSingle()
+      if (error) throw error
+
+      let profileRow = data
+      if (!profileRow) {
+        const fallbackDisplayName =
+          user.value.user_metadata?.display_name ||
+          user.value.user_metadata?.full_name ||
+          null
+
+        const { data: created, error: createError } = await supabase
+          .from('profiles')
+          .upsert(
+            {
+              id: user.value.id,
+              display_name: fallbackDisplayName,
+            },
+            { onConflict: 'id' }
+          )
+          .select('*')
+          .single()
+        if (createError) throw createError
+        profileRow = created
+      }
+
       const authDisplayName = user.value.user_metadata?.display_name || null
       profile.value = {
-        ...(data || {}),
-        display_name: authDisplayName || data?.display_name || null,
+        ...(profileRow || {}),
+        display_name: authDisplayName || profileRow?.display_name || null,
       }
     } catch (e) {
       console.error('fetchProfile error:', e)
@@ -126,35 +150,26 @@ export const useAuthStore = defineStore('auth', () => {
         'Saving profile timed out. Please try again.'
       )
       if (error) throw error
-      let authSyncWarning = null
-
-      // Best-effort sync to Auth UI display name. Do not block profile save on this.
-      if (nextDisplayName && nextDisplayName !== currentDisplayName) {
-        try {
-          const { data: authData, error: authError } = await withRetry(
-            () =>
-              withTimeout(
-                supabase.auth.updateUser({
-                  data: { display_name: nextDisplayName },
-                }),
-                3000,
-                'Updating Auth display name timed out.'
-              ),
-            1
-          )
-          if (authError) throw authError
-          user.value = authData?.user || user.value
-        } catch (e) {
-          authSyncWarning = e.message
-          console.warn('Auth display_name sync failed:', e)
-        }
-      }
-
       profile.value = {
         ...data,
         display_name: nextDisplayName || user.value.user_metadata?.display_name || data?.display_name || null,
       }
-      return { warning: authSyncWarning }
+
+      // Sync display name to Auth metadata — awaited so it completes before navigation.
+      if (nextDisplayName && nextDisplayName !== currentDisplayName) {
+        try {
+          const { data: authData, error: authError } = await withTimeout(
+            supabase.auth.updateUser({ data: { display_name: nextDisplayName } }),
+            8000,
+            'Updating Auth display name timed out.'
+          )
+          if (authError) throw authError
+          if (authData?.user) user.value = authData.user
+        } catch (e) {
+          console.warn('Auth display_name sync failed:', e)
+        }
+      }
+      return
     }
 
     profile.value = {

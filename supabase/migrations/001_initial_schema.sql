@@ -151,7 +151,15 @@ create policy "Members can view all members of their gigs"
 create policy "Authenticated users can join gigs"
   on public.gig_members for insert
   to authenticated
-  with check (user_id = auth.uid());
+  with check (
+    user_id = auth.uid()
+    and exists (
+      select 1
+      from public.gigs
+      where gigs.id = gig_members.gig_id
+        and gigs.status = 'open'
+    )
+  );
 
 create policy "Members can leave gigs"
   on public.gig_members for delete
@@ -190,6 +198,7 @@ create table if not exists public.songs (
   setlist_order int,
   song_key      text,
   notes         text,
+  is_cancelled  boolean not null default false,
   voice_memo_url text,
   duration_ms  int,
   created_at   timestamptz default now() not null
@@ -495,6 +504,47 @@ for each row execute procedure public.prevent_owner_leave_without_transfer();
 -- =========================================
 -- USER NOTIFICATIONS (LEADER ASSIGNED)
 -- =========================================
+
+-- Atomic gig creation workflow for reliability on slower networks.
+create or replace function public.create_gig_with_owner_membership(
+  gig_name text,
+  gig_description text,
+  gig_invite_code char(6)
+)
+returns public.gigs
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  caller_id uuid := auth.uid();
+  created_gig public.gigs;
+begin
+  if caller_id is null then
+    raise exception 'Not authenticated.';
+  end if;
+
+  if gig_name is null or btrim(gig_name) = '' then
+    raise exception 'Gig name is required.';
+  end if;
+
+  if gig_invite_code is null or length(gig_invite_code) <> 6 then
+    raise exception 'Invite code must be 6 characters.';
+  end if;
+
+  insert into public.gigs (name, description, owner_id, invite_code)
+  values (btrim(gig_name), nullif(btrim(gig_description), ''), caller_id, upper(gig_invite_code))
+  returning * into created_gig;
+
+  insert into public.gig_members (gig_id, user_id, role)
+  values (created_gig.id, caller_id, 'owner');
+
+  return created_gig;
+end;
+$$;
+
+revoke all on function public.create_gig_with_owner_membership(text, text, char) from public;
+grant execute on function public.create_gig_with_owner_membership(text, text, char) to authenticated;
 
 create table if not exists public.user_notifications (
   id uuid primary key default gen_random_uuid(),

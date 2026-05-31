@@ -96,10 +96,7 @@ async function handleSave() {
     if (avatarFile.value) {
       updates.avatar_url = await authStore.uploadAvatar(avatarFile.value)
     }
-    const result = await authStore.updateProfile(updates)
-    if (result?.warning) {
-      error.value = `Saved, but Auth profile sync is delayed: ${result.warning}`
-    }
+    await authStore.updateProfile(updates)
     saved.value = true
   } catch (e) {
     error.value = e.message

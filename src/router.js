@@ -60,6 +60,12 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   const authStore = useAuthStore()
+  const hasDisplayName = () => {
+    const profileName = authStore.profile?.display_name?.trim?.()
+    const metaName = authStore.user?.user_metadata?.display_name?.trim?.()
+    const fullName = authStore.user?.user_metadata?.full_name?.trim?.()
+    return Boolean(profileName || metaName || fullName)
+  }
 
   // Wait for auth to initialize before guarding (watcher-based, no polling)
   if (authStore.loading) {
@@ -82,13 +88,18 @@ router.beforeEach(async (to) => {
   if (to.meta.requiresGuest && authStore.isAuthenticated) {
     return { path: '/dashboard' }
   }
-  // Redirect to onboarding if authenticated but profile not yet set up
-  if (
-    authStore.isAuthenticated &&
-    !authStore.profile?.display_name &&
-    to.path !== '/onboarding'
-  ) {
-    return { path: '/onboarding' }
+  // Redirect to onboarding only after one fresh profile check.
+  if (authStore.isAuthenticated && to.path !== '/onboarding') {
+    if (!hasDisplayName()) {
+      try {
+        await authStore.fetchProfile()
+      } catch {
+        // Ignore and fall back to existing guard behavior below.
+      }
+    }
+    if (!hasDisplayName()) {
+      return { path: '/onboarding' }
+    }
   }
 })
 

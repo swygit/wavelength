@@ -7,7 +7,8 @@ export const useGigStore = defineStore('gigs', () => {
   const gigs = ref([])
   const currentGig = ref(null)
   const loading = ref(false)
-  const REQUEST_TIMEOUT = 3000
+  const READ_TIMEOUT = 15000
+  const WRITE_TIMEOUT = 8000
 
   async function fetchMyGigs() {
     loading.value = true
@@ -19,7 +20,7 @@ export const useGigStore = defineStore('gigs', () => {
           .select('gig_id, role, gigs(id, name, description, invite_code, created_at, owner_id, status)')
           .eq('user_id', authStore.user.id)
           .order('created_at', { foreignTable: 'gigs', ascending: false }),
-        REQUEST_TIMEOUT,
+        READ_TIMEOUT,
         'Loading gigs timed out. Please try again.'
       )
       if (error) {
@@ -34,14 +35,42 @@ export const useGigStore = defineStore('gigs', () => {
   async function createGig(name, description) {
     const authStore = useAuthStore()
     const inviteCode = generateCode()
+    const cleanName = name?.trim()
+    const cleanDescription = description?.trim() || null
 
+    // Preferred path: single RPC call avoids partial success and is faster over high latency.
+    const { data: rpcGig, error: rpcErr } = await withTimeout(
+      supabase.rpc('create_gig_with_owner_membership', {
+        gig_name: cleanName,
+        gig_description: cleanDescription,
+        gig_invite_code: inviteCode,
+      }),
+      WRITE_TIMEOUT,
+      'Creating gig timed out. Please try again.'
+    )
+
+    if (!rpcErr && rpcGig) {
+      gigs.value.unshift({ ...rpcGig, role: 'owner' })
+      return rpcGig
+    }
+
+    const isMissingRpc =
+      rpcErr &&
+      (rpcErr.code === 'PGRST202' ||
+        rpcErr.message?.toLowerCase?.().includes('create_gig_with_owner_membership'))
+
+    if (!isMissingRpc) {
+      throw new Error(rpcErr?.message || 'Failed to create gig.')
+    }
+
+    // Backward-compatible fallback for databases that do not yet have the RPC.
     const { data: gig, error: gigErr } = await withTimeout(
       supabase
         .from('gigs')
-        .insert({ name, description, owner_id: authStore.user.id, invite_code: inviteCode })
+        .insert({ name: cleanName, description: cleanDescription, owner_id: authStore.user.id, invite_code: inviteCode })
         .select()
         .single(),
-      REQUEST_TIMEOUT,
+      WRITE_TIMEOUT,
       'Creating gig timed out. Please try again.'
     )
     if (gigErr) throw gigErr
@@ -50,8 +79,8 @@ export const useGigStore = defineStore('gigs', () => {
       supabase
         .from('gig_members')
         .insert({ gig_id: gig.id, user_id: authStore.user.id, role: 'owner' }),
-      REQUEST_TIMEOUT,
-      'Joining your new gig timed out. Please try again.'
+      WRITE_TIMEOUT,
+      'Finalizing gig setup timed out. Please try again.'
     )
     if (memberErr) throw new Error(memberErr.message || 'Failed to add you as gig member.')
 
@@ -68,10 +97,13 @@ export const useGigStore = defineStore('gigs', () => {
         .select('*')
         .eq('invite_code', inviteCode.trim().toUpperCase())
         .single(),
-      REQUEST_TIMEOUT,
+      READ_TIMEOUT,
       'Looking up invite code timed out. Please try again.'
     )
     if (findErr || !gig) throw new Error('Invalid invite code.')
+    if (gig.status === 'closed') {
+      throw new Error('Voting is closed for this gig. Please contact the owner to reopen it.')
+    }
 
     // Check if already a member
     const { data: existing } = await withTimeout(
@@ -81,7 +113,7 @@ export const useGigStore = defineStore('gigs', () => {
         .eq('gig_id', gig.id)
         .eq('user_id', authStore.user.id)
         .maybeSingle(),
-      REQUEST_TIMEOUT,
+      READ_TIMEOUT,
       'Checking existing membership timed out. Please try again.'
     )
     if (existing) throw new Error('You are already a member of this gig.')
@@ -90,7 +122,7 @@ export const useGigStore = defineStore('gigs', () => {
       supabase
         .from('gig_members')
         .insert({ gig_id: gig.id, user_id: authStore.user.id, role: 'member' }),
-      REQUEST_TIMEOUT,
+      WRITE_TIMEOUT,
       'Joining gig timed out. Please try again.'
     )
     if (memberErr) throw memberErr
@@ -106,7 +138,7 @@ export const useGigStore = defineStore('gigs', () => {
         .select('*, gig_members(user_id, role, profiles(id, display_name, avatar_url))')
         .eq('id', gigId)
         .single(),
-      REQUEST_TIMEOUT,
+      READ_TIMEOUT,
       'Loading gig timed out. Please try again.'
     )
     if (error) throw error
@@ -122,7 +154,7 @@ export const useGigStore = defineStore('gigs', () => {
         .eq('id', gigId)
         .select()
         .single(),
-      REQUEST_TIMEOUT,
+      WRITE_TIMEOUT,
       'Updating voting status timed out. Please try again.'
     )
     if (error) throw error
@@ -139,7 +171,7 @@ export const useGigStore = defineStore('gigs', () => {
         .delete()
         .eq('gig_id', gigId)
         .eq('user_id', authStore.user.id),
-      REQUEST_TIMEOUT,
+      WRITE_TIMEOUT,
       'Leaving gig timed out. Please try again.'
     )
     if (error) throw new Error(error.message || 'Failed to leave gig.')
@@ -154,7 +186,7 @@ export const useGigStore = defineStore('gigs', () => {
         target_gig_id: gigId,
         new_owner_user_id: newOwnerUserId,
       }),
-      REQUEST_TIMEOUT,
+      WRITE_TIMEOUT,
       'Transferring ownership timed out. Please try again.'
     )
     if (error) throw new Error(error.message || 'Failed to transfer ownership and leave gig.')
@@ -169,7 +201,7 @@ export const useGigStore = defineStore('gigs', () => {
         .from('gigs')
         .delete()
         .eq('id', gigId),
-      REQUEST_TIMEOUT,
+      WRITE_TIMEOUT,
       'Deleting gig timed out. Please try again.'
     )
     if (error) throw new Error(error.message || 'Failed to delete gig.')

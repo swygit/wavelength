@@ -14,7 +14,7 @@
       </div>
 
       <!-- Loading -->
-      <AppLoading v-if="loading" />
+      <AppLoading v-if="pageLoading" />
 
       <!-- Fetch error -->
       <div v-else-if="fetchError" class="bg-red-900/50 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm">
@@ -116,7 +116,8 @@ import { supabase } from '../lib/supabase'
 
 const gigStore = useGigStore()
 const authStore = useAuthStore()
-const { gigs, loading } = storeToRefs(gigStore)
+const { gigs } = storeToRefs(gigStore)
+const pageLoading = ref(true)
 const fetchError = ref(null)
 const pendingClosedGigNotices = ref([])
 const pendingLeaderNotices = ref([])
@@ -131,13 +132,17 @@ async function fetchLeaderAssignmentNotices() {
     return
   }
 
-  const { data, error } = await supabase
-    .from('user_notifications')
-    .select('id, gig_id, created_at, gigs(name)')
-    .eq('user_id', authStore.user.id)
-    .eq('type', 'leader_assigned')
-    .is('read_at', null)
-    .order('created_at', { ascending: true })
+  const { data, error } = await withTimeout(
+    supabase
+      .from('user_notifications')
+      .select('id, gig_id, created_at, gigs(name)')
+      .eq('user_id', authStore.user.id)
+      .eq('type', 'leader_assigned')
+      .is('read_at', null)
+      .order('created_at', { ascending: true }),
+    15000,
+    'Loading notifications timed out.'
+  )
 
   if (error) throw new Error(error.message || 'Failed to load leader notifications.')
 
@@ -218,15 +223,41 @@ function viewSummaryFromNotice() {
   dismissClosedGigNotice()
 }
 
+function withTimeout(promise, timeoutMs, message) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(message)), timeoutMs)),
+  ])
+}
+
 onMounted(async () => {
+  let justOnboarded = false
+  try {
+    justOnboarded = sessionStorage.getItem('wavelength.justOnboarded') === '1'
+    if (justOnboarded) {
+      sessionStorage.removeItem('wavelength.justOnboarded')
+      pageLoading.value = false
+    }
+  } catch {
+    // Ignore storage access issues and use default loading behavior.
+  }
+
   try {
     await gigStore.fetchMyGigs()
-    await fetchLeaderAssignmentNotices()
     queueClosedGigNotices()
   } catch (e) {
     fetchError.value = e.message
   } finally {
-    gigStore.loading = false
+    if (!justOnboarded) {
+      pageLoading.value = false
+    }
+  }
+
+  // Load notifications after primary page content is ready.
+  try {
+    await fetchLeaderAssignmentNotices()
+  } catch (e) {
+    console.warn('Leader notification fetch failed:', e)
   }
 })
 </script>

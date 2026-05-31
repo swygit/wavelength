@@ -54,9 +54,14 @@
           </div>
           <div>
             <label class="block text-sm text-gray-300 mb-1">Password</label>
-            <input v-model="form.password" type="password" class="input-field" placeholder="Your password" required minlength="6" />
+            <input v-model="form.password" type="password" class="input-field" placeholder="At least 6 characters" required minlength="6" />
           </div>
-          <button type="submit" class="btn-primary w-full" :disabled="loading">
+          <div>
+            <label class="block text-sm text-gray-300 mb-1">Confirm password</label>
+            <input v-model="form.confirmPassword" type="password" class="input-field" :class="confirmMismatch ? 'border-red-500 focus:border-red-500' : ''" placeholder="Repeat your password" required />
+            <p v-if="confirmMismatch" class="mt-1 text-xs text-red-400">Passwords don't match</p>
+          </div>
+          <button type="submit" class="btn-primary w-full" :disabled="loading || confirmMismatch || !form.confirmPassword">
             {{ loading ? 'Creating account…' : 'Create Account' }}
           </button>
         </form>
@@ -92,7 +97,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
@@ -105,7 +110,11 @@ const loading = ref(false)
 const error = ref(null)
 const signedUp = ref(false)
 
-const form = reactive({ email: '', password: '' })
+const form = reactive({ email: '', password: '', confirmPassword: '' })
+
+const confirmMismatch = computed(() =>
+  form.confirmPassword.length > 0 && form.password !== form.confirmPassword
+)
 
 async function handleLogin() {
   loading.value = true

@@ -91,7 +91,21 @@
         class="space-y-3"
       >
         <template #item="{ element: song, index: idx }">
-          <div class="card" :key="song.id">
+          <div class="card relative" :class="song.is_cancelled ? 'opacity-60 border-gray-600' : ''" :key="song.id">
+            <!-- Cross-out toggle: top-right corner -->
+            <button
+              class="absolute top-3.5 right-4 w-5 h-5 rounded-full flex items-center justify-center transition-all"
+              :class="song.is_cancelled ? 'bg-green-500/20 text-green-300 hover:bg-green-500/35' : 'bg-red-500/25 text-red-300 hover:bg-red-500/45'"
+              :title="song.is_cancelled ? 'Restore song' : 'Cross out'"
+              @click="toggleCancelled(song)"
+            >
+              <svg v-if="song.is_cancelled" viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                <path d="M3 12h18M9 6l-6 6 6 6" />
+              </svg>
+              <svg v-else viewBox="0 0 24 24" class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                <line x1="5" y1="5" x2="19" y2="19" /><line x1="19" y1="5" x2="5" y2="19" />
+              </svg>
+            </button>
             <div class="flex items-start gap-3">
               <!-- Drag handle -->
               <div class="drag-handle flex-shrink-0 flex items-center h-12 cursor-grab text-gray-500 hover:text-gray-300 mt-1">
@@ -103,8 +117,11 @@
               </div>
 
               <!-- Setlist order badge -->
-              <div class="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center font-bold text-base mt-1.5 bg-brand-700 text-white">
-                {{ idx + 1 }}
+              <div
+                class="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center font-bold text-base mt-1.5"
+                :class="song.is_cancelled ? 'bg-gray-700 text-gray-300' : 'bg-brand-700 text-white'"
+              >
+                {{ song.is_cancelled ? '✕' : idx + 1 }}
               </div>
 
               <!-- Album art -->
@@ -115,24 +132,25 @@
               <div class="flex-1 min-w-0">
                 <div class="flex items-start justify-between gap-2">
                   <div class="min-w-0">
-                    <div class="font-semibold truncate">{{ song.title }}</div>
-                    <div class="text-sm text-gray-400 truncate">{{ song.artist }}</div>
+                    <div class="font-semibold truncate" :class="song.is_cancelled ? 'line-through text-gray-400' : ''">{{ song.title }}</div>
+                    <div class="text-sm text-gray-400 truncate" :class="song.is_cancelled ? 'line-through text-gray-500' : ''">{{ song.artist }}</div>
                     <div v-if="song.votes.filter(v => v.value !== 0).length === 0" class="mt-1">
                       <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-700 text-gray-400">No votes</span>
                     </div>
                   </div>
                   <!-- Score -->
-                  <div class="text-right flex-shrink-0">
+                  <div class="text-right flex-shrink-0 pr-6">
                     <div class="text-xs mb-0.5">
                       <span class="px-1.5 py-0.5 rounded-full bg-gray-700 text-gray-300">
-                        <template v-if="popularityRankBySongId[song.id] === 1">🥇 1st</template>
-                        <template v-else-if="popularityRankBySongId[song.id] === 2">🥈 2nd</template>
-                        <template v-else-if="popularityRankBySongId[song.id] === 3">🥉 3rd</template>
-                        <template v-else>{{ ordinal(popularityRankBySongId[song.id]) }}</template>
+                        <template v-if="!song.is_cancelled && popularityRankBySongId[song.id] === 1">🥇 1st</template>
+                        <template v-else-if="!song.is_cancelled && popularityRankBySongId[song.id] === 2">🥈 2nd</template>
+                        <template v-else-if="!song.is_cancelled && popularityRankBySongId[song.id] === 3">🥉 3rd</template>
+                        <template v-else-if="!song.is_cancelled">{{ ordinal(popularityRankBySongId[song.id]) }}</template>
+                        <template v-else>—</template>
                       </span>
                     </div>
-                    <div class="text-xl font-bold" :class="song.score > 0 ? 'text-green-400' : song.score < 0 ? 'text-red-400' : 'text-gray-400'">
-                      {{ song.score > 0 ? '+' : '' }}{{ song.score }}
+                    <div class="text-xl font-bold" :class="song.is_cancelled ? 'text-gray-600' : song.score > 0 ? 'text-green-400' : song.score < 0 ? 'text-red-400' : 'text-gray-400'">
+                      {{ song.is_cancelled ? '–' : (song.score > 0 ? '+' : '') + song.score }}
                     </div>
                   </div>
                 </div>
@@ -240,6 +258,8 @@ let copyStatusTimer = null
 
 // ─── Ordered songs (drag-and-drop) ───────────────────────────────────────────
 const orderedSongs = ref([])
+const finalizedSongs = computed(() => orderedSongs.value.filter((song) => !song.is_cancelled))
+const canceledSongs = computed(() => orderedSongs.value.filter((song) => song.is_cancelled))
 
 function initOrder() {
   const sorted = [...songs.value].sort((a, b) => {
@@ -274,9 +294,13 @@ async function saveSongKey(song, value) {
   await songStore.updateSetlistFields(song.id, { song_key: value || null })
 }
 
+async function toggleCancelled(song) {
+  await songStore.updateSetlistFields(song.id, { is_cancelled: !song.is_cancelled })
+}
+
 // ─── Computed ──────────────────────────────────────────────────────────────────
 const popularityRankBySongId = computed(() => {
-  const sorted = [...songs.value].sort((a, b) => b.score - a.score)
+  const sorted = [...finalizedSongs.value].sort((a, b) => b.score - a.score)
   const ranks = {}
   sorted.forEach((song, idx) => {
     ranks[song.id] = idx + 1
@@ -342,8 +366,8 @@ function emojiBreakdown(song) {
 }
 
 const highestRatedSong = computed(() => {
-  if (!songs.value.length) return null
-  return [...songs.value].sort((a, b) => {
+  if (!orderedSongs.value.length) return null
+  return [...orderedSongs.value].sort((a, b) => {
     const upvoteDiff = upvoteCount(b) - upvoteCount(a)
     if (upvoteDiff !== 0) return upvoteDiff
     const scoreDiff = b.score - a.score
@@ -355,8 +379,8 @@ const highestRatedSong = computed(() => {
 const highestRatedUpvotes = computed(() => upvoteCount(highestRatedSong.value))
 
 const mostPopularSong = computed(() => {
-  if (!songs.value.length) return null
-  return [...songs.value].sort((a, b) => {
+  if (!orderedSongs.value.length) return null
+  return [...orderedSongs.value].sort((a, b) => {
     const reactionDiff = (b.reactions?.length || 0) - (a.reactions?.length || 0)
     if (reactionDiff !== 0) return reactionDiff
     return interactionCount(b) - interactionCount(a)
@@ -366,8 +390,8 @@ const mostPopularSong = computed(() => {
 const mostPopularEmojiBreakdown = computed(() => emojiBreakdown(mostPopularSong.value))
 
 const leastEngagedSong = computed(() => {
-  if (!songs.value.length) return null
-  return [...songs.value].sort((a, b) => {
+  if (!orderedSongs.value.length) return null
+  return [...orderedSongs.value].sort((a, b) => {
     const interactionDiff = socialInteractionCount(a) - socialInteractionCount(b)
     if (interactionDiff !== 0) return interactionDiff
     return a.score - b.score
@@ -384,12 +408,12 @@ function buildSummaryText() {
     '',
   ]
 
-  if (!orderedSongs.value.length) {
+  if (!finalizedSongs.value.length) {
     lines.push('No songs in this setlist yet.')
     return lines.join('\n')
   }
 
-  for (const [index, song] of orderedSongs.value.entries()) {
+  for (const [index, song] of finalizedSongs.value.entries()) {
     lines.push(`${index + 1}. ${song.title} - ${song.artist}`)
     lines.push(`   Key: ${song.song_key || '-'}`)
     lines.push(`   Note: ${song.notes?.trim() || '-'}`)
