@@ -116,12 +116,22 @@ const confirmMismatch = computed(() =>
   form.confirmPassword.length > 0 && form.password !== form.confirmPassword
 )
 
+function sanitizeRedirect(target) {
+  const fallback = '/dashboard'
+  const value = typeof target === 'string' ? target : Array.isArray(target) ? target[0] : ''
+  if (!value || !value.startsWith('/') || value.startsWith('//')) return fallback
+
+  const resolved = router.resolve(value)
+  if (!resolved.matched?.length) return fallback
+  return resolved.fullPath
+}
+
 async function handleLogin() {
   loading.value = true
   error.value = null
   try {
     await authStore.signIn(form.email, form.password)
-    const redirect = route.query.redirect || '/dashboard'
+    const redirect = sanitizeRedirect(route.query.redirect)
     router.push(redirect)
   } catch (e) {
     error.value = e.message

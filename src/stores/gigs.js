@@ -89,43 +89,24 @@ export const useGigStore = defineStore('gigs', () => {
   }
 
   async function joinGig(inviteCode) {
-    const authStore = useAuthStore()
-
-    const { data: gig, error: findErr } = await withTimeout(
-      supabase
-        .from('gigs')
-        .select('*')
-        .eq('invite_code', inviteCode.trim().toUpperCase())
-        .single(),
-      READ_TIMEOUT,
-      'Looking up invite code timed out. Please try again.'
-    )
-    if (findErr || !gig) throw new Error('Invalid invite code.')
-    if (gig.status === 'closed') {
-      throw new Error('Voting is closed for this gig. Please contact the owner to reopen it.')
-    }
-
-    // Check if already a member
-    const { data: existing } = await withTimeout(
-      supabase
-        .from('gig_members')
-        .select('id')
-        .eq('gig_id', gig.id)
-        .eq('user_id', authStore.user.id)
-        .maybeSingle(),
-      READ_TIMEOUT,
-      'Checking existing membership timed out. Please try again.'
-    )
-    if (existing) throw new Error('You are already a member of this gig.')
-
-    const { error: memberErr } = await withTimeout(
-      supabase
-        .from('gig_members')
-        .insert({ gig_id: gig.id, user_id: authStore.user.id, role: 'member' }),
+    const code = inviteCode.trim().toUpperCase()
+    const { data: gig, error } = await withTimeout(
+      supabase.rpc('join_gig_by_invite', {
+        invite_code_input: code,
+      }),
       WRITE_TIMEOUT,
       'Joining gig timed out. Please try again.'
     )
-    if (memberErr) throw memberErr
+
+    if (error) {
+      const message = error.message || 'Failed to join gig.'
+      if (message.includes('Invalid invite code.')) throw new Error('Invalid invite code.')
+      if (message.includes('already a member')) throw new Error('You are already a member of this gig.')
+      if (message.includes('Voting is closed')) {
+        throw new Error('Voting is closed for this gig. Please contact the owner to reopen it.')
+      }
+      throw new Error(message)
+    }
 
     gigs.value.unshift({ ...gig, role: 'member' })
     return gig

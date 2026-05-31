@@ -181,8 +181,60 @@ create policy "Gig members can view their gigs"
       where gig_members.gig_id = gigs.id
         and gig_members.user_id = auth.uid()
     )
-    or invite_code is not null  -- allow lookup by invite_code to join
   );
+
+-- Secure invite-based join workflow without exposing all gigs to authenticated users.
+create or replace function public.join_gig_by_invite(invite_code_input text)
+returns public.gigs
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  caller_id uuid := auth.uid();
+  normalized_code char(6);
+  target_gig public.gigs;
+begin
+  if caller_id is null then
+    raise exception 'Not authenticated.';
+  end if;
+
+  normalized_code := upper(btrim(invite_code_input));
+  if normalized_code is null or length(normalized_code) <> 6 then
+    raise exception 'Invalid invite code.';
+  end if;
+
+  select *
+  into target_gig
+  from public.gigs
+  where invite_code = normalized_code;
+
+  if target_gig.id is null then
+    raise exception 'Invalid invite code.';
+  end if;
+
+  if target_gig.status <> 'open' then
+    raise exception 'Voting is closed for this gig. Please contact the owner to reopen it.';
+  end if;
+
+  if exists (
+    select 1
+    from public.gig_members
+    where gig_id = target_gig.id
+      and user_id = caller_id
+  ) then
+    raise exception 'You are already a member of this gig.';
+  end if;
+
+  insert into public.gig_members (gig_id, user_id, role)
+  values (target_gig.id, caller_id, 'member');
+
+  return target_gig;
+end;
+$$;
+
+revoke all on function public.join_gig_by_invite(text) from public;
+grant execute on function public.join_gig_by_invite(text) to authenticated;
 
 -- =========================================
 -- SONGS
@@ -640,3 +692,121 @@ $$;
 
 revoke all on function public.transfer_gig_ownership_and_leave(uuid, uuid) from public;
 grant execute on function public.transfer_gig_ownership_and_leave(uuid, uuid) to authenticated;
+
+-- =========================================
+-- STORAGE (avatars + voice memos)
+-- =========================================
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do update set public = excluded.public;
+
+insert into storage.buckets (id, name, public)
+values ('voice-memos', 'voice-memos', true)
+on conflict (id) do update set public = excluded.public;
+
+drop policy if exists "Authenticated users can read avatar objects" on storage.objects;
+create policy "Authenticated users can read avatar objects"
+  on storage.objects for select
+  to authenticated
+  using (bucket_id = 'avatars');
+
+drop policy if exists "Users can upload their own avatar" on storage.objects;
+create policy "Users can upload their own avatar"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "Users can update their own avatar" on storage.objects;
+create policy "Users can update their own avatar"
+  on storage.objects for update
+  to authenticated
+  using (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  )
+  with check (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "Users can delete their own avatar" on storage.objects;
+create policy "Users can delete their own avatar"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "Gig members can read voice memos" on storage.objects;
+create policy "Gig members can read voice memos"
+  on storage.objects for select
+  to authenticated
+  using (
+    bucket_id = 'voice-memos'
+    and (storage.foldername(name))[1] ~* '^[0-9a-f-]{36}$'
+    and exists (
+      select 1
+      from public.gig_members
+      where gig_members.gig_id = ((storage.foldername(name))[1])::uuid
+        and gig_members.user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "Gig members can upload voice memos" on storage.objects;
+create policy "Gig members can upload voice memos"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'voice-memos'
+    and (storage.foldername(name))[1] ~* '^[0-9a-f-]{36}$'
+    and exists (
+      select 1
+      from public.gig_members
+      where gig_members.gig_id = ((storage.foldername(name))[1])::uuid
+        and gig_members.user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "Gig members can update voice memos" on storage.objects;
+create policy "Gig members can update voice memos"
+  on storage.objects for update
+  to authenticated
+  using (
+    bucket_id = 'voice-memos'
+    and (storage.foldername(name))[1] ~* '^[0-9a-f-]{36}$'
+    and exists (
+      select 1
+      from public.gig_members
+      where gig_members.gig_id = ((storage.foldername(name))[1])::uuid
+        and gig_members.user_id = auth.uid()
+    )
+  )
+  with check (
+    bucket_id = 'voice-memos'
+    and (storage.foldername(name))[1] ~* '^[0-9a-f-]{36}$'
+    and exists (
+      select 1
+      from public.gig_members
+      where gig_members.gig_id = ((storage.foldername(name))[1])::uuid
+        and gig_members.user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "Gig members can delete voice memos" on storage.objects;
+create policy "Gig members can delete voice memos"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'voice-memos'
+    and (storage.foldername(name))[1] ~* '^[0-9a-f-]{36}$'
+    and exists (
+      select 1
+      from public.gig_members
+      where gig_members.gig_id = ((storage.foldername(name))[1])::uuid
+        and gig_members.user_id = auth.uid()
+    )
+  );

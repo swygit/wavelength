@@ -117,13 +117,20 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function signOut() {
-    // Clear local auth state immediately so UI navigation never blocks on network.
+    const { error: localError } = await withTimeout(
+      supabase.auth.signOut({ scope: 'local' }),
+      SIGNOUT_TIMEOUT,
+      'Signing out timed out.'
+    )
+    if (localError) throw localError
+
+    // Clear in-memory state after local session/token removal succeeds.
     user.value = null
     profile.value = null
 
-    // Best-effort server sign-out in background.
+    // Best-effort global revocation in background.
     withRetry(
-      () => withTimeout(supabase.auth.signOut(), SIGNOUT_TIMEOUT, 'Signing out timed out.'),
+      () => withTimeout(supabase.auth.signOut({ scope: 'global' }), SIGNOUT_TIMEOUT, 'Global sign-out timed out.'),
       1
     )
       .then(({ error }) => {
