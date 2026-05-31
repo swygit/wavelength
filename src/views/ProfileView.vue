@@ -14,7 +14,7 @@
         </div>
 
         <div v-if="saved" class="bg-green-900/50 border border-green-700 text-green-300 rounded-lg px-4 py-3 mb-4 text-sm">
-          Profile updated.
+          Saved!
         </div>
 
         <form @submit.prevent="handleSave" class="space-y-6">

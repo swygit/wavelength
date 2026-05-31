@@ -8,6 +8,7 @@ export const useSongStore = defineStore('songs', () => {
   const loading = ref(false)
   let realtimeChannel = null
   const VOICE_MEMO_TIMEOUT_MS = 20000
+  const SONG_WRITE_TIMEOUT_MS = 10000
 
   async function fetchSongs(gigId) {
     loading.value = true
@@ -31,32 +32,89 @@ export const useSongStore = defineStore('songs', () => {
 
   async function addSong(gigId, songData) {
     const authStore = useAuthStore()
-    const { data, error } = await supabase
-      .from('songs')
-      .insert({
-        gig_id: gigId,
-        added_by: authStore.user.id,
-        title: songData.title,
-        artist: songData.artist,
-        album: songData.album,
-        album_art: songData.albumArt,
-        preview_url: songData.previewUrl,
-        external_url: songData.externalUrl,
-        source: songData.source,
-        spotify_id: songData.spotifyId ?? null,
-        youtube_id: songData.youtubeId ?? null,
-        duration_ms: songData.durationMs ?? null,
-      })
-      .select(`
-        *,
-        votes(id, user_id, value),
-        reactions(id, user_id, emoji),
-        comments(id, user_id, body, created_at, updated_at, profiles(display_name, avatar_url))
-      `)
-      .single()
+    const payload = {
+      gig_id: gigId,
+      added_by: authStore.user.id,
+      title: songData.title,
+      artist: songData.artist,
+      album: songData.album,
+      album_art: songData.albumArt,
+      preview_url: songData.previewUrl,
+      external_url: songData.externalUrl,
+      source: songData.source,
+      spotify_id: songData.spotifyId ?? null,
+      youtube_id: songData.youtubeId ?? null,
+      duration_ms: songData.durationMs ?? null,
+    }
+
+    const appendOrUpdateSong = (song) => {
+      const enriched = enrichSong(song)
+      const exists = songs.value.some((s) => s.id === enriched.id)
+      if (!exists) songs.value.push(enriched)
+      return song
+    }
+
+    const recoverAddedSong = async () => {
+      try {
+        const { data, error } = await withTimeout(
+          supabase
+            .from('songs')
+            .select(`
+              *,
+              votes(id, user_id, value),
+              reactions(id, user_id, emoji),
+              comments(id, user_id, body, created_at, updated_at, profiles(display_name, avatar_url))
+            `)
+            .eq('gig_id', gigId)
+            .eq('added_by', authStore.user.id)
+            .eq('title', payload.title)
+            .eq('source', payload.source)
+            .order('created_at', { ascending: false })
+            .limit(5),
+          SONG_WRITE_TIMEOUT_MS,
+          'Checking song add status timed out. Please try again.'
+        )
+        if (error || !data?.length) return null
+
+        const recovered = data.find((song) =>
+          (song.artist || null) === (payload.artist || null)
+          && (song.spotify_id || null) === (payload.spotify_id || null)
+          && (song.youtube_id || null) === (payload.youtube_id || null)
+        ) || data[0]
+
+        return appendOrUpdateSong(recovered)
+      } catch {
+        return null
+      }
+    }
+
+    let data
+    let error
+    try {
+      const result = await withTimeout(
+        supabase
+          .from('songs')
+          .insert(payload)
+          .select(`
+            *,
+            votes(id, user_id, value),
+            reactions(id, user_id, emoji),
+            comments(id, user_id, body, created_at, updated_at, profiles(display_name, avatar_url))
+          `)
+          .single(),
+        SONG_WRITE_TIMEOUT_MS,
+        'Adding song timed out. Please try again.'
+      )
+      data = result.data
+      error = result.error
+    } catch (e) {
+      const recovered = await recoverAddedSong()
+      if (recovered) return recovered
+      throw e
+    }
+
     if (error) throw error
-    songs.value.push(enrichSong(data))
-    return data
+    return appendOrUpdateSong(data)
   }
 
   async function removeSong(songId) {

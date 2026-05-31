@@ -63,15 +63,19 @@ onMounted(() => {
 })
 
 async function handleCreate() {
+  let navigated = false
   loading.value = true
   error.value = null
   try {
     const gig = await gigStore.createGig(name.value.trim(), description.value.trim())
-    router.push(`/gigs/${gig.id}`)
+    await router.replace(`/gigs/${gig.id}`)
+    navigated = true
   } catch (e) {
     error.value = e.message
   } finally {
-    loading.value = false
+    if (!navigated) {
+      loading.value = false
+    }
   }
 }
 </script>

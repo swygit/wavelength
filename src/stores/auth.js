@@ -181,19 +181,35 @@ export const useAuthStore = defineStore('auth', () => {
         display_name: nextDisplayName || user.value.user_metadata?.display_name || data?.display_name || null,
       }
 
-      // Sync display name to Auth metadata — awaited so it completes before navigation.
-      if (nextDisplayName && nextDisplayName !== currentDisplayName) {
-        try {
-          const { data: authData, error: authError } = await withTimeout(
-            supabase.auth.updateUser({ data: { display_name: nextDisplayName } }),
-            8000,
-            'Updating Auth display name timed out.'
-          )
-          if (authError) throw authError
-          if (authData?.user) user.value = authData.user
-        } catch (e) {
-          console.warn('Auth display_name sync failed:', e)
+      // Keep local auth metadata aligned immediately for UI/guards.
+      if (nextDisplayName) {
+        user.value = {
+          ...user.value,
+          user_metadata: {
+            ...(user.value.user_metadata || {}),
+            display_name: nextDisplayName,
+          },
         }
+      }
+
+      // Sync display name to Auth metadata in the background so save can finish fast.
+      if (nextDisplayName && nextDisplayName !== currentDisplayName) {
+        withRetry(
+          () =>
+            withTimeout(
+              supabase.auth.updateUser({ data: { display_name: nextDisplayName } }),
+              8000,
+              'Updating Auth display name timed out.'
+            ),
+          1
+        )
+          .then(({ data: authData, error: authError }) => {
+            if (authError) throw authError
+            if (authData?.user) user.value = authData.user
+          })
+          .catch((e) => {
+            console.warn('Auth display_name sync failed:', e)
+          })
       }
       return
     }

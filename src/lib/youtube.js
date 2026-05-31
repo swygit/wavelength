@@ -26,7 +26,17 @@ export async function searchYouTubeVideos(query, maxResults = 5) {
   url.searchParams.set('maxResults', String(maxResults))
 
   const res = await fetch(url.toString())
-  if (!res.ok) throw new Error('YouTube search failed')
+  if (!res.ok) {
+    let message = 'YouTube search failed'
+    try {
+      const err = await res.json()
+      const apiMessage = err?.error?.message
+      if (apiMessage) message = `YouTube search failed: ${apiMessage}`
+    } catch {
+      // Ignore parse errors and keep default message.
+    }
+    throw new Error(message)
+  }
 
   const data = await res.json()
   return (data.items ?? []).map((item) => ({

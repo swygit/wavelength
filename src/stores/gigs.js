@@ -38,20 +38,53 @@ export const useGigStore = defineStore('gigs', () => {
     const cleanName = name?.trim()
     const cleanDescription = description?.trim() || null
 
+    const addOrUpdateOwnedGig = (gig) => {
+      const ownedGig = { ...gig, role: 'owner' }
+      gigs.value = [ownedGig, ...gigs.value.filter((g) => g.id !== gig.id)]
+      return gig
+    }
+
+    const recoverCreatedGig = async () => {
+      try {
+        const { data, error } = await withTimeout(
+          supabase
+            .from('gigs')
+            .select('id, name, description, invite_code, created_at, owner_id, status')
+            .eq('invite_code', inviteCode)
+            .maybeSingle(),
+          READ_TIMEOUT,
+          'Checking gig creation status timed out. Please try again.'
+        )
+        if (error || !data) return null
+        return addOrUpdateOwnedGig(data)
+      } catch {
+        return null
+      }
+    }
+
     // Preferred path: single RPC call avoids partial success and is faster over high latency.
-    const { data: rpcGig, error: rpcErr } = await withTimeout(
-      supabase.rpc('create_gig_with_owner_membership', {
-        gig_name: cleanName,
-        gig_description: cleanDescription,
-        gig_invite_code: inviteCode,
-      }),
-      WRITE_TIMEOUT,
-      'Creating gig timed out. Please try again.'
-    )
+    let rpcGig
+    let rpcErr
+    try {
+      const rpcResult = await withTimeout(
+        supabase.rpc('create_gig_with_owner_membership', {
+          gig_name: cleanName,
+          gig_description: cleanDescription,
+          gig_invite_code: inviteCode,
+        }),
+        WRITE_TIMEOUT,
+        'Creating gig timed out. Please try again.'
+      )
+      rpcGig = rpcResult.data
+      rpcErr = rpcResult.error
+    } catch (e) {
+      const recovered = await recoverCreatedGig()
+      if (recovered) return recovered
+      throw e
+    }
 
     if (!rpcErr && rpcGig) {
-      gigs.value.unshift({ ...rpcGig, role: 'owner' })
-      return rpcGig
+      return addOrUpdateOwnedGig(rpcGig)
     }
 
     const isMissingRpc =
@@ -60,43 +93,96 @@ export const useGigStore = defineStore('gigs', () => {
         rpcErr.message?.toLowerCase?.().includes('create_gig_with_owner_membership'))
 
     if (!isMissingRpc) {
+      const recovered = await recoverCreatedGig()
+      if (recovered) return recovered
       throw new Error(rpcErr?.message || 'Failed to create gig.')
     }
 
     // Backward-compatible fallback for databases that do not yet have the RPC.
-    const { data: gig, error: gigErr } = await withTimeout(
-      supabase
-        .from('gigs')
-        .insert({ name: cleanName, description: cleanDescription, owner_id: authStore.user.id, invite_code: inviteCode })
-        .select()
-        .single(),
-      WRITE_TIMEOUT,
-      'Creating gig timed out. Please try again.'
-    )
+    let gig
+    let gigErr
+    try {
+      const gigResult = await withTimeout(
+        supabase
+          .from('gigs')
+          .insert({ name: cleanName, description: cleanDescription, owner_id: authStore.user.id, invite_code: inviteCode })
+          .select()
+          .single(),
+        WRITE_TIMEOUT,
+        'Creating gig timed out. Please try again.'
+      )
+      gig = gigResult.data
+      gigErr = gigResult.error
+    } catch (e) {
+      const recovered = await recoverCreatedGig()
+      if (recovered) return recovered
+      throw e
+    }
     if (gigErr) throw gigErr
 
-    const { error: memberErr } = await withTimeout(
-      supabase
-        .from('gig_members')
-        .insert({ gig_id: gig.id, user_id: authStore.user.id, role: 'owner' }),
-      WRITE_TIMEOUT,
-      'Finalizing gig setup timed out. Please try again.'
-    )
+    let memberErr
+    try {
+      const memberResult = await withTimeout(
+        supabase
+          .from('gig_members')
+          .insert({ gig_id: gig.id, user_id: authStore.user.id, role: 'owner' }),
+        WRITE_TIMEOUT,
+        'Finalizing gig setup timed out. Please try again.'
+      )
+      memberErr = memberResult.error
+    } catch (e) {
+      const recovered = await recoverCreatedGig()
+      if (recovered) return recovered
+      throw e
+    }
     if (memberErr) throw new Error(memberErr.message || 'Failed to add you as gig member.')
 
-    gigs.value.unshift({ ...gig, role: 'owner' })
-    return gig
+    return addOrUpdateOwnedGig(gig)
   }
 
   async function joinGig(inviteCode) {
     const code = inviteCode.trim().toUpperCase()
-    const { data: gig, error } = await withTimeout(
-      supabase.rpc('join_gig_by_invite', {
-        invite_code_input: code,
-      }),
-      WRITE_TIMEOUT,
-      'Joining gig timed out. Please try again.'
-    )
+    const addOrUpdateMemberGig = (gig) => {
+      const memberGig = { ...gig, role: 'member' }
+      gigs.value = [memberGig, ...gigs.value.filter((g) => g.id !== gig.id)]
+      return gig
+    }
+
+    const recoverJoinedGig = async () => {
+      try {
+        const { data, error } = await withTimeout(
+          supabase
+            .from('gigs')
+            .select('id, name, description, invite_code, created_at, owner_id, status')
+            .eq('invite_code', code)
+            .maybeSingle(),
+          READ_TIMEOUT,
+          'Checking join status timed out. Please try again.'
+        )
+        if (error || !data) return null
+        return addOrUpdateMemberGig(data)
+      } catch {
+        return null
+      }
+    }
+
+    let gig
+    let error
+    try {
+      const result = await withTimeout(
+        supabase.rpc('join_gig_by_invite', {
+          invite_code_input: code,
+        }),
+        WRITE_TIMEOUT,
+        'Joining gig timed out. Please try again.'
+      )
+      gig = result.data
+      error = result.error
+    } catch (e) {
+      const recovered = await recoverJoinedGig()
+      if (recovered) return recovered
+      throw e
+    }
 
     if (error) {
       const message = error.message || 'Failed to join gig.'
@@ -108,8 +194,7 @@ export const useGigStore = defineStore('gigs', () => {
       throw new Error(message)
     }
 
-    gigs.value.unshift({ ...gig, role: 'member' })
-    return gig
+    return addOrUpdateMemberGig(gig)
   }
 
   async function fetchGig(gigId) {
