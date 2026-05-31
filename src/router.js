@@ -63,8 +63,7 @@ router.beforeEach(async (to) => {
   const hasDisplayName = () => {
     const profileName = authStore.profile?.display_name?.trim?.()
     const metaName = authStore.user?.user_metadata?.display_name?.trim?.()
-    const fullName = authStore.user?.user_metadata?.full_name?.trim?.()
-    return Boolean(profileName || metaName || fullName)
+    return Boolean(profileName || metaName)
   }
 
   // Wait for auth to initialize before guarding (watcher-based, no polling)

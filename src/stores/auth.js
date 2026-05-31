@@ -43,10 +43,7 @@ export const useAuthStore = defineStore('auth', () => {
 
       let profileRow = data
       if (!profileRow) {
-        const fallbackDisplayName =
-          user.value.user_metadata?.display_name ||
-          user.value.user_metadata?.full_name ||
-          null
+        const fallbackDisplayName = user.value.user_metadata?.display_name || null
 
         const { data: created, error: createError } = await supabase
           .from('profiles')
