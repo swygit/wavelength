@@ -1,9 +1,9 @@
 <template>
   <AppLayout>
     <div class="max-w-lg mx-auto">
-      <RouterLink to="/dashboard" class="text-sm text-gray-400 hover:text-white mb-6 inline-flex items-center gap-1">
+      <a href="/dashboard" class="text-sm text-gray-400 hover:text-white mb-6 inline-flex items-center gap-1">
         ← Back to Dashboard
-      </RouterLink>
+      </a>
 
       <div class="card mt-4">
         <h1 class="text-xl font-bold mb-2">Edit profile</h1>
@@ -58,7 +58,6 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { RouterLink } from 'vue-router'
 import AppLayout from '../components/AppLayout.vue'
 import { useAuthStore } from '../stores/auth'
 
