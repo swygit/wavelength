@@ -19,7 +19,13 @@
             <div v-else class="w-7 h-7 rounded-full bg-gray-800 flex items-center justify-center text-xs">👤</div>
             <span class="text-xs sm:text-sm text-gray-300 hidden sm:block max-w-[10rem] truncate">{{ authStore.profile?.display_name || authStore.user?.email }}</span>
           </RouterLink>
-          <button class="text-xs sm:text-sm text-gray-400 hover:text-white transition-colors whitespace-nowrap" @click="handleSignOut">Sign out</button>
+          <button
+            class="text-xs sm:text-sm text-gray-400 hover:text-white transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="signingOut"
+            @click="handleSignOut"
+          >
+            {{ signingOut ? 'Signing out...' : 'Sign out' }}
+          </button>
         </div>
       </div>
     </nav>
@@ -32,14 +38,22 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 const authStore = useAuthStore()
 const router = useRouter()
+const signingOut = ref(false)
 
 async function handleSignOut() {
-  await authStore.signOut()
-  router.push('/auth')
+  if (signingOut.value) return
+  signingOut.value = true
+  try {
+    await authStore.signOut()
+    router.replace('/')
+  } finally {
+    signingOut.value = false
+  }
 }
 </script>

@@ -74,6 +74,17 @@ export const useAuthStore = defineStore('auth', () => {
     return data
   }
 
+  async function signInWithGoogle(redirectTo) {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo,
+      },
+    })
+    if (error) throw error
+    return data
+  }
+
   function normalizeEmail(email) {
     return String(email ?? '')
       .trim()
@@ -84,6 +95,9 @@ export const useAuthStore = defineStore('auth', () => {
   async function signOut() {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
+    // Clear local auth state immediately to avoid route-guard race conditions.
+    user.value = null
+    profile.value = null
   }
 
   async function updateProfile(updates) {
@@ -184,5 +198,5 @@ export const useAuthStore = defineStore('auth', () => {
     throw lastError
   }
 
-  return { user, profile, loading, isAuthenticated, init, signUp, signIn, signOut, updateProfile, fetchProfile, uploadAvatar }
+  return { user, profile, loading, isAuthenticated, init, signUp, signIn, signInWithGoogle, signOut, updateProfile, fetchProfile, uploadAvatar }
 })
