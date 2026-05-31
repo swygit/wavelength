@@ -20,6 +20,8 @@ export async function searchYouTubeVideos(query, maxResults = 5) {
   url.searchParams.set('q', query)
   url.searchParams.set('part', 'snippet')
   url.searchParams.set('type', 'video')
+  url.searchParams.set('videoEmbeddable', 'true')
+  url.searchParams.set('videoSyndicated', 'true')
   url.searchParams.set('videoCategoryId', '10') // Music category
   url.searchParams.set('maxResults', String(maxResults))
 

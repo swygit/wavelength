@@ -40,7 +40,7 @@
     </div>
 
     <!-- Search input -->
-    <form @submit.prevent="handleSearch" class="flex gap-2 mb-3">
+    <form @submit.prevent="handleSearch" class="flex flex-col sm:flex-row gap-2 mb-3">
       <input
         v-model="query"
         type="text"
@@ -48,7 +48,7 @@
         :placeholder="activeSource === 'spotify' ? 'Search Spotify tracks…' : 'Search YouTube videos…'"
         :disabled="searching"
       />
-      <button type="submit" class="btn-primary text-sm px-3" :disabled="!query.trim() || searching">
+      <button type="submit" class="btn-primary text-sm px-3 w-full sm:w-auto" :disabled="!query.trim() || searching">
         {{ searching ? '…' : 'Search' }}
       </button>
     </form>

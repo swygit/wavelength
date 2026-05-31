@@ -165,6 +165,10 @@ create table if not exists public.songs (
   source       text not null check (source in ('spotify', 'youtube', 'manual')),
   spotify_id   text,
   youtube_id   text,
+  setlist_order int,
+  song_key      text,
+  notes         text,
+  voice_memo_url text,
   duration_ms  int,
   created_at   timestamptz default now() not null
 );
@@ -205,6 +209,24 @@ create policy "Song adder or gig owner can remove songs"
     )
   );
 
+create policy "Gig members can update song setlist fields"
+  on public.songs for update
+  to authenticated
+  using (
+    exists (
+      select 1 from public.gig_members
+      where gig_members.gig_id = songs.gig_id
+        and gig_members.user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.gig_members
+      where gig_members.gig_id = songs.gig_id
+        and gig_members.user_id = auth.uid()
+    )
+  );
+
 -- =========================================
 -- VOTES
 -- =========================================
@@ -231,7 +253,7 @@ create policy "Gig members can view votes"
     )
   );
 
-create policy "Gig members can vote"
+create policy "Gig members can vote excluding own songs"
   on public.votes for insert
   to authenticated
   with check (
@@ -241,13 +263,31 @@ create policy "Gig members can vote"
       join public.gig_members on gig_members.gig_id = songs.gig_id
       where songs.id = votes.song_id
         and gig_members.user_id = auth.uid()
+        and songs.added_by <> auth.uid()
     )
   );
 
-create policy "Users can update their own votes"
+create policy "Users can update their own votes excluding own songs"
   on public.votes for update
   to authenticated
-  using (user_id = auth.uid());
+  using (
+    user_id = auth.uid()
+    and exists (
+      select 1
+      from public.songs
+      where songs.id = votes.song_id
+        and songs.added_by <> auth.uid()
+    )
+  )
+  with check (
+    user_id = auth.uid()
+    and exists (
+      select 1
+      from public.songs
+      where songs.id = votes.song_id
+        and songs.added_by <> auth.uid()
+    )
+  );
 
 create policy "Users can remove their own votes"
   on public.votes for delete
@@ -306,7 +346,8 @@ create table if not exists public.comments (
   song_id  uuid not null references public.songs(id) on delete cascade,
   user_id  uuid not null references public.profiles(id) on delete cascade,
   body     text not null,
-  created_at timestamptz default now() not null
+  created_at timestamptz default now() not null,
+  updated_at timestamptz default now() not null
 );
 
 alter table public.comments enable row level security;
@@ -335,6 +376,12 @@ create policy "Gig members can add comments"
         and gig_members.user_id = auth.uid()
     )
   );
+
+create policy "Users can update their own comments"
+  on public.comments for update
+  to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
 
 create policy "Users can delete their own comments"
   on public.comments for delete

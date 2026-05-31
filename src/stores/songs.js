@@ -7,6 +7,7 @@ export const useSongStore = defineStore('songs', () => {
   const songs = ref([])
   const loading = ref(false)
   let realtimeChannel = null
+  const VOICE_MEMO_TIMEOUT_MS = 20000
 
   async function fetchSongs(gigId) {
     loading.value = true
@@ -17,7 +18,7 @@ export const useSongStore = defineStore('songs', () => {
           *,
           votes(id, user_id, value),
           reactions(id, user_id, emoji),
-          comments(id, user_id, body, created_at, profiles(display_name, avatar_url))
+          comments(id, user_id, body, created_at, updated_at, profiles(display_name, avatar_url))
         `)
         .eq('gig_id', gigId)
         .order('created_at', { ascending: true })
@@ -50,7 +51,7 @@ export const useSongStore = defineStore('songs', () => {
         *,
         votes(id, user_id, value),
         reactions(id, user_id, emoji),
-        comments(id, user_id, body, created_at, profiles(display_name, avatar_url))
+        comments(id, user_id, body, created_at, updated_at, profiles(display_name, avatar_url))
       `)
       .single()
     if (error) throw error
@@ -67,6 +68,11 @@ export const useSongStore = defineStore('songs', () => {
   async function castVote(songId, value) {
     const authStore = useAuthStore()
     const userId = authStore.user.id
+    const song = songs.value.find((s) => s.id === songId)
+
+    if (song?.added_by === userId) {
+      throw new Error('You cannot vote on a song you added.')
+    }
 
     // Upsert the vote (one vote per user per song)
     const { data, error } = await supabase
@@ -76,11 +82,13 @@ export const useSongStore = defineStore('songs', () => {
       .single()
     if (error) throw error
 
-    const song = songs.value.find((s) => s.id === songId)
     if (song) {
       const idx = song.votes.findIndex((v) => v.user_id === userId)
-      if (idx >= 0) song.votes[idx] = data
-      else song.votes.push(data)
+      if (idx >= 0) {
+        song.votes = song.votes.map((v, i) => (i === idx ? data : v))
+      } else {
+        song.votes = [...song.votes, data]
+      }
       song.score = calcScore(song.votes)
       song.myVote = value
     }
@@ -104,7 +112,7 @@ export const useSongStore = defineStore('songs', () => {
         .select()
         .single()
       if (error) throw error
-      if (song) song.reactions.push(data)
+      if (song && !song.reactions.some((r) => r.id === data.id)) song.reactions.push(data)
     }
   }
 
@@ -113,11 +121,31 @@ export const useSongStore = defineStore('songs', () => {
     const { data, error } = await supabase
       .from('comments')
       .insert({ song_id: songId, user_id: authStore.user.id, body })
-      .select('id, user_id, body, created_at, profiles(display_name, avatar_url)')
+      .select('id, user_id, body, created_at, updated_at, profiles(display_name, avatar_url)')
       .single()
     if (error) throw error
     const song = songs.value.find((s) => s.id === songId)
-    if (song) song.comments.push(data)
+    if (song && !song.comments.some((c) => c.id === data.id)) song.comments.push(data)
+    return data
+  }
+
+  async function updateComment(commentId, body) {
+    const { data, error } = await supabase
+      .from('comments')
+      .update({ body, updated_at: new Date().toISOString() })
+      .eq('id', commentId)
+      .select('id, user_id, body, created_at, updated_at, profiles(display_name, avatar_url)')
+      .single()
+    if (error) throw error
+
+    for (const song of songs.value) {
+      const idx = song.comments.findIndex((c) => c.id === commentId)
+      if (idx >= 0) {
+        song.comments = song.comments.map((c, i) => (i === idx ? data : c))
+        break
+      }
+    }
+
     return data
   }
 
@@ -140,6 +168,7 @@ export const useSongStore = defineStore('songs', () => {
     realtimeChannel = channel
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reactions' }, handleReactionChange)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comments' }, handleCommentInsert)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'comments' }, handleCommentUpdate)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'songs', filter: `gig_id=eq.${gigId}` }, handleSongInsert)
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'songs', filter: `gig_id=eq.${gigId}` }, handleSongDelete)
       .subscribe()
@@ -158,11 +187,11 @@ export const useSongStore = defineStore('songs', () => {
     const song = songs.value.find((s) => s.id === row.song_id)
     if (!song) return
     if (eventType === 'INSERT' || eventType === 'UPDATE') {
-      const idx = song.votes.findIndex((v) => v.id === row.id)
+      const idx = song.votes.findIndex((v) => v.id === row.id || v.user_id === row.user_id)
       if (idx >= 0) song.votes[idx] = row
       else song.votes.push(row)
     } else if (eventType === 'DELETE') {
-      song.votes = song.votes.filter((v) => v.id !== row.id)
+      song.votes = song.votes.filter((v) => v.id !== row.id && v.user_id !== row.user_id)
     }
     song.score = calcScore(song.votes)
   }
@@ -172,7 +201,9 @@ export const useSongStore = defineStore('songs', () => {
     const row = newRow || oldRow
     const song = songs.value.find((s) => s.id === row.song_id)
     if (!song) return
-    if (eventType === 'INSERT') song.reactions.push(row)
+    if (eventType === 'INSERT') {
+      if (!song.reactions.some((r) => r.id === row.id)) song.reactions.push(row)
+    }
     else if (eventType === 'DELETE') song.reactions = song.reactions.filter((r) => r.id !== row.id)
   }
 
@@ -183,10 +214,27 @@ export const useSongStore = defineStore('songs', () => {
     // Fetch with profile
     const { data } = await supabase
       .from('comments')
-      .select('id, user_id, body, created_at, profiles(display_name, avatar_url)')
+      .select('id, user_id, body, created_at, updated_at, profiles(display_name, avatar_url)')
       .eq('id', row.id)
       .single()
-    if (data) song.comments.push(data)
+    if (data && !song.comments.some((c) => c.id === data.id)) song.comments.push(data)
+  }
+
+  async function handleCommentUpdate(payload) {
+    const row = payload.new
+    for (const song of songs.value) {
+      const idx = song.comments.findIndex((c) => c.id === row.id)
+      if (idx < 0) continue
+      const { data } = await supabase
+        .from('comments')
+        .select('id, user_id, body, created_at, updated_at, profiles(display_name, avatar_url)')
+        .eq('id', row.id)
+        .single()
+      if (data) {
+        song.comments = song.comments.map((c, i) => (i === idx ? data : c))
+      }
+      break
+    }
   }
 
   async function handleSongInsert(payload) {
@@ -194,7 +242,7 @@ export const useSongStore = defineStore('songs', () => {
     if (songs.value.some((s) => s.id === row.id)) return
     const { data } = await supabase
       .from('songs')
-      .select('*, votes(id, user_id, value), reactions(id, user_id, emoji), comments(id, user_id, body, created_at, profiles(display_name, avatar_url))')
+      .select('*, votes(id, user_id, value), reactions(id, user_id, emoji), comments(id, user_id, body, created_at, updated_at, profiles(display_name, avatar_url))')
       .eq('id', row.id)
       .single()
     if (data) songs.value.push(enrichSong(data))
@@ -218,9 +266,92 @@ export const useSongStore = defineStore('songs', () => {
     return (votes ?? []).reduce((sum, v) => sum + (v.value ?? 0), 0)
   }
 
+  async function updateSetlistFields(songId, fields) {
+    // fields: any subset of { setlist_order, song_key, notes, voice_memo_url }
+    const allowed = {}
+    for (const key of ['setlist_order', 'song_key', 'notes', 'voice_memo_url']) {
+      if (key in fields) allowed[key] = fields[key]
+    }
+    const { error } = await supabase.from('songs').update(allowed).eq('id', songId)
+    if (error) throw error
+    const song = songs.value.find((s) => s.id === songId)
+    if (song) Object.assign(song, allowed)
+  }
+
+  async function uploadVoiceMemo(songId, gigId, blob) {
+    const fileName = blob?.name || ''
+    const nameExt = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : ''
+    const type = (blob?.type || '').toLowerCase()
+    const ext = nameExt || (type.includes('ogg') ? 'ogg' : type.includes('webm') ? 'webm' : type.includes('wav') ? 'wav' : type.includes('mpeg') || type.includes('mp3') ? 'mp3' : 'm4a')
+    const mimeByExt = {
+      mp3: 'audio/mpeg',
+      wav: 'audio/wav',
+      m4a: 'audio/mp4',
+      ogg: 'audio/ogg',
+      webm: 'audio/webm',
+    }
+    const contentType = type || mimeByExt[ext] || 'audio/mpeg'
+    const path = `${gigId}/${songId}-${Date.now()}.${ext}`
+    const { error: upErr } = await withTimeout(
+      supabase.storage.from('voice-memos').upload(path, blob, { upsert: true, contentType }),
+      VOICE_MEMO_TIMEOUT_MS,
+      'Voice memo upload timed out. Please try again.'
+    )
+    if (upErr) throw upErr
+    const { data } = supabase.storage.from('voice-memos').getPublicUrl(path)
+    await withTimeout(
+      updateSetlistFields(songId, { voice_memo_url: data.publicUrl }),
+      VOICE_MEMO_TIMEOUT_MS,
+      'Saving voice memo link timed out. Please try again.'
+    )
+    return data.publicUrl
+  }
+
+  function withTimeout(promise, timeoutMs, message) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(message)), timeoutMs)),
+    ])
+  }
+
+  function extractVoiceMemoPath(url) {
+    if (!url) return ''
+    try {
+      const pathname = new URL(url).pathname
+      const markers = [
+        '/storage/v1/object/public/voice-memos/',
+        '/storage/v1/object/sign/voice-memos/',
+        '/storage/v1/object/authenticated/voice-memos/',
+      ]
+      for (const marker of markers) {
+        const idx = pathname.indexOf(marker)
+        if (idx >= 0) return decodeURIComponent(pathname.slice(idx + marker.length))
+      }
+    } catch { /* ignore */ }
+    return ''
+  }
+
+  async function pruneStaleMemos() {
+    const songsWithMemo = songs.value.filter((s) => s.voice_memo_url)
+    await Promise.all(
+      songsWithMemo.map(async (song) => {
+        const path = extractVoiceMemoPath(song.voice_memo_url)
+        if (!path) return
+        const { error } = await supabase.storage.from('voice-memos').createSignedUrl(path, 60)
+        if (error) {
+          // File no longer exists in storage — clear the DB reference
+          try {
+            await updateSetlistFields(song.id, { voice_memo_url: null })
+          } catch { /* best effort */ }
+        }
+      })
+    )
+  }
+
   return {
     songs, loading,
-    fetchSongs, addSong, removeSong, castVote, toggleReaction, addComment,
+    fetchSongs, addSong, removeSong, castVote, toggleReaction, addComment, updateComment,
     subscribeToGig, unsubscribe,
+    updateSetlistFields, uploadVoiceMemo, pruneStaleMemos,
   }
 })

@@ -37,7 +37,7 @@
         <!-- Song list (left / main) -->
         <div class="lg:col-span-2 space-y-4">
           <!-- Add Song -->
-          <AddSongPanel :gig-id="gigId" />
+          <AddSongPanel v-if="gig.status === 'open'" :gig-id="gigId" />
 
           <!-- Songs -->
           <AppLoading v-if="songStore.loading" />
@@ -51,11 +51,16 @@
             :key="song.id"
             :song="song"
             :voting-open="gig.status === 'open'"
+            :selected="song.id === selectedSongId"
+            :members-map="membersMap"
+            @select="selectSong"
           />
         </div>
 
         <!-- Sidebar (right) -->
         <div class="space-y-4">
+          <SongPlayer v-if="selectedSong" :song="selectedSong" @clear="selectedSongId = null" />
+
           <!-- Members + Naughty List -->
           <NaughtyList :gig="gig" :songs="songs" />
         </div>
@@ -96,10 +101,12 @@ import AppLayout from '../components/AppLayout.vue'
 import AppLoading from '../components/AppLoading.vue'
 import AddSongPanel from '../components/AddSongPanel.vue'
 import SongCard from '../components/SongCard.vue'
+import SongPlayer from '../components/SongPlayer.vue'
 import NaughtyList from '../components/NaughtyList.vue'
 import { useGigStore } from '../stores/gigs'
 import { useSongStore } from '../stores/songs'
 import { useAuthStore } from '../stores/auth'
+import confetti from 'canvas-confetti'
 
 const route = useRoute()
 const gigId = route.params.id
@@ -116,8 +123,17 @@ const pageLoading = ref(true)
 const showCloseModal = ref(false)
 const statusSaving = ref(false)
 const statusError = ref(null)
+const selectedSongId = ref(null)
 
 const isOwner = computed(() => gig.value?.owner_id === authStore.user?.id)
+const selectedSong = computed(() => songs.value.find((song) => song.id === selectedSongId.value) || null)
+const membersMap = computed(() => {
+  const map = {}
+  for (const m of gig.value?.gig_members ?? []) {
+    map[m.user_id] = m.profiles
+  }
+  return map
+})
 
 onMounted(async () => {
   try {
@@ -155,6 +171,12 @@ async function confirmCloseVoting() {
   try {
     await closeVoting()
     showCloseModal.value = false
+    confetti({
+      particleCount: 160,
+      spread: 90,
+      origin: { y: 0.55 },
+      colors: ['#6366f1', '#a78bfa', '#34d399', '#fbbf24', '#f472b6'],
+    })
   } catch {}
 }
 
@@ -171,5 +193,9 @@ async function reopenVoting() {
   } finally {
     statusSaving.value = false
   }
+}
+
+function selectSong(song) {
+  selectedSongId.value = song.id
 }
 </script>

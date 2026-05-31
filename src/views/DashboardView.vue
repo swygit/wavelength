@@ -53,26 +53,99 @@
         </RouterLink>
       </div>
     </div>
+
+    <div
+      v-if="activeClosedGigNotice"
+      class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      @click.self="dismissClosedGigNotice"
+    >
+      <div class="w-full max-w-lg card border border-brand-500/40">
+        <p class="text-xs uppercase tracking-wide text-brand-300">Voting Closed</p>
+        <h2 class="text-lg font-bold mt-1">{{ activeClosedGigNotice.name }} is ready for final planning</h2>
+        <p class="text-sm text-gray-300 mt-3 leading-relaxed">
+          Voting has been closed by the owner. You can now view analytics, arrange the song order, and add song keys, notes, and voice memos.
+        </p>
+        <div class="mt-5 flex flex-col sm:flex-row sm:justify-end gap-2">
+          <button class="btn-secondary text-sm w-full sm:w-auto" @click="dismissClosedGigNotice">Not now</button>
+          <RouterLink
+            :to="`/gigs/${activeClosedGigNotice.id}/summary`"
+            class="btn-primary text-sm w-full sm:w-auto"
+            @click="viewSummaryFromNotice"
+          >
+            View analytics
+          </RouterLink>
+        </div>
+      </div>
+    </div>
   </AppLayout>
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import AppLayout from '../components/AppLayout.vue'
 import AppLoading from '../components/AppLoading.vue'
 import { useGigStore } from '../stores/gigs'
+import { useAuthStore } from '../stores/auth'
 
 const gigStore = useGigStore()
+const authStore = useAuthStore()
 const { gigs, loading } = storeToRefs(gigStore)
-
-import { ref } from 'vue'
 const fetchError = ref(null)
+const pendingClosedGigNotices = ref([])
+
+const closedNoticeStorageKey = computed(() => `wavelength.closedGigNotices.${authStore.user?.id || 'anon'}`)
+const activeClosedGigNotice = computed(() => pendingClosedGigNotices.value[0] || null)
+
+function getSeenClosedGigIds() {
+  try {
+    const raw = localStorage.getItem(closedNoticeStorageKey.value)
+    if (!raw) return new Set()
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return new Set()
+    return new Set(parsed)
+  } catch {
+    return new Set()
+  }
+}
+
+function saveSeenClosedGigIds(ids) {
+  try {
+    localStorage.setItem(closedNoticeStorageKey.value, JSON.stringify([...ids]))
+  } catch {
+    // Ignore storage errors so dashboard remains usable.
+  }
+}
+
+function markClosedGigSeen(gigId) {
+  const seen = getSeenClosedGigIds()
+  seen.add(gigId)
+  saveSeenClosedGigIds(seen)
+}
+
+function queueClosedGigNotices() {
+  const seen = getSeenClosedGigIds()
+  pendingClosedGigNotices.value = gigs.value.filter(
+    (gig) => gig.status === 'closed' && gig.role !== 'owner' && !seen.has(gig.id)
+  )
+}
+
+function dismissClosedGigNotice() {
+  const current = activeClosedGigNotice.value
+  if (!current) return
+  markClosedGigSeen(current.id)
+  pendingClosedGigNotices.value = pendingClosedGigNotices.value.slice(1)
+}
+
+function viewSummaryFromNotice() {
+  dismissClosedGigNotice()
+}
 
 onMounted(async () => {
   try {
     await gigStore.fetchMyGigs()
+    queueClosedGigNotices()
   } catch (e) {
     fetchError.value = e.message
   } finally {

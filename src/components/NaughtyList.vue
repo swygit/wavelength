@@ -23,9 +23,9 @@
         </div>
         <span
           class="text-xs px-2 py-0.5 rounded-full"
-          :class="member.hasVotedAll ? 'bg-green-900 text-green-300' : member.hasVotedSome ? 'bg-yellow-900 text-yellow-300' : 'bg-red-900/60 text-red-300'"
+          :class="!member.needsVotes ? 'bg-gray-800 text-gray-400' : member.hasVotedAll ? 'bg-green-900 text-green-300' : member.hasVotedSome ? 'bg-yellow-900 text-yellow-300' : 'bg-red-900/60 text-red-300'"
         >
-          {{ member.hasVotedAll ? '✓ Done' : member.hasVotedSome ? `${member.votedCount}/${totalSongs}` : 'No votes' }}
+          {{ !member.needsVotes ? 'N/A' : member.hasVotedAll ? '✓ Done' : `${member.votedCount}/${member.eligibleCount}` }}
         </span>
       </div>
     </div>
@@ -42,14 +42,18 @@
         >
           <span>😈</span>
           <span>{{ member.display_name || 'Unknown' }}</span>
-          <span class="text-gray-500">({{ member.votedCount }}/{{ totalSongs }})</span>
+          <span class="text-gray-500">({{ member.votedCount }}/{{ member.eligibleCount }})</span>
         </div>
       </div>
     </div>
 
     <!-- All done message -->
-    <div v-else-if="memberList.length > 0 && totalSongs > 0" class="border-t border-gray-700 pt-3 text-xs text-green-400">
+    <div v-else-if="memberList.length > 0 && totalEligibleVotes > 0" class="border-t border-gray-700 pt-3 text-xs text-green-400">
       🎉 Everyone has voted!
+    </div>
+
+    <div v-else-if="memberList.length > 0" class="border-t border-gray-700 pt-3 text-xs text-gray-400">
+      No eligible songs to vote on yet.
     </div>
 
     <!-- Invite code reminder -->
@@ -81,27 +85,33 @@ const props = defineProps({
 
 const copied = ref(false)
 
-const totalSongs = computed(() => props.songs.length)
-
 const memberList = computed(() => {
   if (!props.gig?.gig_members) return []
   return props.gig.gig_members.map((m) => {
-    const votedSongs = props.songs.filter((s) => s.votes?.some((v) => v.user_id === m.user_id))
+    const eligibleSongs = props.songs.filter((s) => s.added_by !== m.user_id)
+    const votedSongs = eligibleSongs.filter((s) => s.votes?.some((v) => v.user_id === m.user_id && v.value !== 0))
+    const eligibleCount = eligibleSongs.length
     const votedCount = votedSongs.length
     return {
       user_id: m.user_id,
       display_name: m.profiles?.display_name,
       avatar_url: m.profiles?.avatar_url,
       role: m.role,
+      eligibleCount,
       votedCount,
-      hasVotedAll: totalSongs.value > 0 && votedCount === totalSongs.value,
-      hasVotedSome: votedCount > 0 && votedCount < totalSongs.value,
+      needsVotes: eligibleCount > 0,
+      hasVotedAll: votedCount === eligibleCount,
+      hasVotedSome: votedCount > 0 && votedCount < eligibleCount,
     }
   })
 })
 
+const totalEligibleVotes = computed(() =>
+  memberList.value.reduce((sum, member) => sum + member.eligibleCount, 0)
+)
+
 const naughtyList = computed(() =>
-  memberList.value.filter((m) => m.votedCount < totalSongs.value)
+  memberList.value.filter((m) => m.needsVotes && m.votedCount < m.eligibleCount)
 )
 
 async function copyInviteLink() {

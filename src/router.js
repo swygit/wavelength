@@ -5,7 +5,7 @@ import { useAuthStore } from './stores/auth'
 const routes = [
   {
     path: '/',
-    redirect: '/dashboard',
+    component: () => import('./views/LandingView.vue'),
   },
   {
     path: '/auth',
@@ -49,7 +49,7 @@ const routes = [
   },
   {
     path: '/:pathMatch(.*)*',
-    redirect: '/dashboard',
+    redirect: '/',
   },
 ]
 
@@ -77,7 +77,7 @@ router.beforeEach(async (to) => {
   }
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    return { path: '/auth', query: { redirect: to.fullPath } }
+    return { path: '/', query: { redirect: to.fullPath } }
   }
   if (to.meta.requiresGuest && authStore.isAuthenticated) {
     return { path: '/dashboard' }
