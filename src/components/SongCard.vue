@@ -1,17 +1,17 @@
 <template>
   <div class="card relative" :class="selected ? 'ring-1 ring-brand-500/70' : ''">
-    <div class="sm:hidden flex items-center justify-between gap-2 mb-3">
-      <div v-if="!votingOpen" class="h-8 min-w-[4.5rem] rounded-full bg-gray-700/90 px-2 border border-gray-600 flex flex-col items-center justify-center leading-none">
+    <div class="sm:hidden flex flex-nowrap items-center justify-between gap-1.5 mb-3">
+      <div v-if="!votingOpen" class="h-8 min-w-[4rem] rounded-full bg-gray-700/90 px-1.5 border border-gray-600 flex flex-col items-center justify-center leading-none">
         <span class="text-[9px] uppercase tracking-wide text-gray-300">Score</span>
         <span class="text-xs font-semibold" :class="song.score > 0 ? 'text-green-400' : song.score < 0 ? 'text-red-400' : 'text-gray-200'">
           {{ song.score > 0 ? '+' : '' }}{{ song.score }}
         </span>
       </div>
 
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1.5 flex-shrink-0">
         <button
           v-if="song.preview_url || song.youtube_id || song.spotify_id"
-          class="w-8 h-8 rounded-full bg-gray-500 text-white flex items-center justify-center hover:bg-gray-400"
+          class="w-7 h-7 rounded-full bg-gray-500 text-white flex items-center justify-center hover:bg-gray-400"
           aria-label="Play song"
           @click="selectForPlayback"
         >
@@ -22,7 +22,7 @@
 
         <button
           v-if="isSongAdder && votingOpen"
-          class="w-8 h-8 rounded-full bg-red-800/90 text-red-100 flex items-center justify-center hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+          class="w-7 h-7 rounded-full bg-red-800/90 text-red-100 flex items-center justify-center hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
           aria-label="Delete song"
           :disabled="isDeleting"
           @click="confirmDeleteSong"

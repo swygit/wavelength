@@ -30,7 +30,7 @@
       </div>
 
       <!-- KPI summary -->
-      <div v-if="orderedSongs.length" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-6">
+      <div v-if="orderedSongs.length" class="grid grid-cols-3 gap-3 mb-6">
         <div class="card border-green-700/50 bg-gradient-to-b from-green-900/35 to-gray-900">
           <p class="text-[11px] uppercase tracking-wide text-green-300/90">MOST LIKES</p>
           <p class="mt-1 text-sm font-semibold truncate">{{ highestRatedSong?.title || 'No songs yet' }}</p>
@@ -58,7 +58,7 @@
           </div>
         </div>
 
-        <div class="card border-rose-700/50 bg-gradient-to-b from-rose-900/30 to-gray-900 sm:col-span-2 lg:col-span-1">
+        <div class="card border-rose-700/50 bg-gradient-to-b from-rose-900/30 to-gray-900">
           <p class="text-[11px] uppercase tracking-wide text-rose-300/90">Better Luck Next Time</p>
           <p class="mt-1 text-sm font-semibold truncate">{{ leastEngagedSong?.title || 'No songs yet' }}</p>
           <p class="text-xs text-gray-400 truncate">{{ leastEngagedSong?.artist || 'Waiting for data' }}</p>
