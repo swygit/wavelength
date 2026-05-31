@@ -131,6 +131,53 @@ export const useGigStore = defineStore('gigs', () => {
     return data
   }
 
+  async function leaveGig(gigId) {
+    const authStore = useAuthStore()
+    const { error } = await withTimeout(
+      supabase
+        .from('gig_members')
+        .delete()
+        .eq('gig_id', gigId)
+        .eq('user_id', authStore.user.id),
+      REQUEST_TIMEOUT,
+      'Leaving gig timed out. Please try again.'
+    )
+    if (error) throw new Error(error.message || 'Failed to leave gig.')
+
+    gigs.value = gigs.value.filter((g) => g.id !== gigId)
+    if (currentGig.value?.id === gigId) currentGig.value = null
+  }
+
+  async function transferOwnershipAndLeave(gigId, newOwnerUserId) {
+    const { error } = await withTimeout(
+      supabase.rpc('transfer_gig_ownership_and_leave', {
+        target_gig_id: gigId,
+        new_owner_user_id: newOwnerUserId,
+      }),
+      REQUEST_TIMEOUT,
+      'Transferring ownership timed out. Please try again.'
+    )
+    if (error) throw new Error(error.message || 'Failed to transfer ownership and leave gig.')
+
+    gigs.value = gigs.value.filter((g) => g.id !== gigId)
+    if (currentGig.value?.id === gigId) currentGig.value = null
+  }
+
+  async function deleteGig(gigId) {
+    const { error } = await withTimeout(
+      supabase
+        .from('gigs')
+        .delete()
+        .eq('id', gigId),
+      REQUEST_TIMEOUT,
+      'Deleting gig timed out. Please try again.'
+    )
+    if (error) throw new Error(error.message || 'Failed to delete gig.')
+
+    gigs.value = gigs.value.filter((g) => g.id !== gigId)
+    if (currentGig.value?.id === gigId) currentGig.value = null
+  }
+
   function generateCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
     return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
@@ -143,5 +190,17 @@ export const useGigStore = defineStore('gigs', () => {
     ])
   }
 
-  return { gigs, currentGig, loading, fetchMyGigs, createGig, joinGig, fetchGig, updateGigStatus }
+  return {
+    gigs,
+    currentGig,
+    loading,
+    fetchMyGigs,
+    createGig,
+    joinGig,
+    fetchGig,
+    updateGigStatus,
+    leaveGig,
+    transferOwnershipAndLeave,
+    deleteGig,
+  }
 })

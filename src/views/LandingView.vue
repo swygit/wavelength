@@ -77,18 +77,16 @@
 
       <section id="how-it-works" class="max-w-6xl mx-auto px-5 py-2 md:py-4">
         <div class="rounded-3xl border border-white/10 bg-gradient-to-br from-[#0f1725] to-[#0b111a] p-7 md:p-10">
-          <p class="text-xs tracking-wider uppercase text-blue-200/80">How It Works</p>
-          <h2 class="text-2xl md:text-4xl font-semibold mt-2">A clear flow from idea to show night.</h2>
-          <p class="text-slate-300 mt-4 max-w-3xl leading-relaxed">
+          <p class="text-xs tracking-wider uppercase text-blue-200/80 text-center">How It Works</p>
+          <h2 class="text-2xl md:text-4xl font-semibold mt-2 text-center">A clear flow from idea to show night.</h2>
+          <p class="text-slate-300 mt-4 max-w-3xl mx-auto text-center leading-relaxed">
             Wavelength follows a simple sequence your whole band can understand. Move step by step and finish with a locked, production-ready set.
           </p>
 
           <div class="mt-7 space-y-3">
             <div class="rounded-2xl border border-white/10 bg-white/5 p-4 md:p-5">
-              <div class="flex items-start gap-3 md:gap-4">
-                <div class="w-14 md:w-16 shrink-0 flex justify-center">
-                  <div class="w-10 h-10 rounded-full bg-cyan-400/20 border border-cyan-300/40 flex items-center justify-center text-lg">🎸</div>
-                </div>
+              <div class="flex flex-col items-center text-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-cyan-400/20 border border-cyan-300/40 flex items-center justify-center text-lg">🎸</div>
                 <div>
                   <p class="text-sm font-semibold">1. Create or Join a Gig</p>
                   <p class="text-xs text-slate-300 mt-1">Start a new workspace or join one with an invite code.</p>
@@ -99,10 +97,8 @@
             <div class="flex justify-center text-slate-500 text-sm">↓</div>
 
             <div class="rounded-2xl border border-white/10 bg-white/5 p-4 md:p-5">
-              <div class="flex items-start gap-3 md:gap-4">
-                <div class="w-14 md:w-16 shrink-0 flex justify-center">
-                  <div class="w-10 h-10 rounded-full bg-emerald-400/20 border border-emerald-300/40 flex items-center justify-center text-lg">👥</div>
-                </div>
+              <div class="flex flex-col items-center text-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-emerald-400/20 border border-emerald-300/40 flex items-center justify-center text-lg">👥</div>
                 <div>
                   <p class="text-sm font-semibold">2. Invite Your Bandmates</p>
                   <p class="text-xs text-slate-300 mt-1">Share the gig code so everyone can contribute in the same place.</p>
@@ -113,20 +109,18 @@
             <div class="flex justify-center text-slate-500 text-sm">↓</div>
 
             <div class="rounded-2xl border border-white/10 bg-white/5 p-4 md:p-5">
-              <div class="flex items-start gap-3 md:gap-4">
-                <div class="w-14 md:w-16 shrink-0 flex justify-center">
-                  <div class="h-10 px-2 rounded-full bg-violet-400/20 border border-violet-300/40 flex items-center justify-center gap-1.5">
-                    <span class="w-4 h-4 rounded-full bg-[#1DB954] flex items-center justify-center">
-                      <svg viewBox="0 0 24 24" class="w-2.5 h-2.5 text-black" fill="currentColor" aria-hidden="true">
-                        <path d="M12 1.5A10.5 10.5 0 1 0 22.5 12 10.51 10.51 0 0 0 12 1.5Zm4.86 15.13a.66.66 0 0 1-.91.22 8.56 8.56 0 0 0-8.65-.4.66.66 0 0 1-.6-1.18 9.89 9.89 0 0 1 10 .45.66.66 0 0 1 .16.91Zm1.3-2.35a.82.82 0 0 1-1.13.27 10.66 10.66 0 0 0-10.77-.48.82.82 0 1 1-.74-1.46 12.3 12.3 0 0 1 12.42.55.82.82 0 0 1 .22 1.12Zm.11-2.52a13 13 0 0 0-13.12-.57.98.98 0 1 1-.89-1.74 14.93 14.93 0 0 1 15.08.66.98.98 0 0 1-1.07 1.65Z"/>
-                      </svg>
-                    </span>
-                    <span class="w-4 h-4 rounded-[4px] bg-[#FF0000] flex items-center justify-center">
-                      <svg viewBox="0 0 24 24" class="w-2.5 h-2.5 text-white" fill="currentColor" aria-hidden="true">
-                        <path d="M19.6 7.2a2.5 2.5 0 0 0-1.8-1.8C16.2 5 12 5 12 5s-4.2 0-5.8.4a2.5 2.5 0 0 0-1.8 1.8C4 8.8 4 12 4 12s0 3.2.4 4.8a2.5 2.5 0 0 0 1.8 1.8C7.8 19 12 19 12 19s4.2 0 5.8-.4a2.5 2.5 0 0 0 1.8-1.8c.4-1.6.4-4.8.4-4.8s0-3.2-.4-4.8ZM10.4 15.1V8.9L15.8 12Z"/>
-                      </svg>
-                    </span>
-                  </div>
+              <div class="flex flex-col items-center text-center gap-3">
+                <div class="h-10 px-2 rounded-full bg-violet-400/20 border border-violet-300/40 flex items-center justify-center gap-1.5">
+                  <span class="w-4 h-4 rounded-full bg-[#1DB954] flex items-center justify-center">
+                    <svg viewBox="0 0 24 24" class="w-2.5 h-2.5 text-black" fill="currentColor" aria-hidden="true">
+                      <path d="M12 1.5A10.5 10.5 0 1 0 22.5 12 10.51 10.51 0 0 0 12 1.5Zm4.86 15.13a.66.66 0 0 1-.91.22 8.56 8.56 0 0 0-8.65-.4.66.66 0 0 1-.6-1.18 9.89 9.89 0 0 1 10 .45.66.66 0 0 1 .16.91Zm1.3-2.35a.82.82 0 0 1-1.13.27 10.66 10.66 0 0 0-10.77-.48.82.82 0 1 1-.74-1.46 12.3 12.3 0 0 1 12.42.55.82.82 0 0 1 .22 1.12Zm.11-2.52a13 13 0 0 0-13.12-.57.98.98 0 1 1-.89-1.74 14.93 14.93 0 0 1 15.08.66.98.98 0 0 1-1.07 1.65Z"/>
+                    </svg>
+                  </span>
+                  <span class="w-4 h-4 rounded-[4px] bg-[#FF0000] flex items-center justify-center">
+                    <svg viewBox="0 0 24 24" class="w-2.5 h-2.5 text-white" fill="currentColor" aria-hidden="true">
+                      <path d="M19.6 7.2a2.5 2.5 0 0 0-1.8-1.8C16.2 5 12 5 12 5s-4.2 0-5.8.4a2.5 2.5 0 0 0-1.8 1.8C4 8.8 4 12 4 12s0 3.2.4 4.8a2.5 2.5 0 0 0 1.8 1.8C7.8 19 12 19 12 19s4.2 0 5.8-.4a2.5 2.5 0 0 0 1.8-1.8c.4-1.6.4-4.8.4-4.8s0-3.2-.4-4.8ZM10.4 15.1V8.9L15.8 12Z"/>
+                    </svg>
+                  </span>
                 </div>
                 <div>
                   <p class="text-sm font-semibold">3. Add Songs</p>
@@ -138,13 +132,11 @@
             <div class="flex justify-center text-slate-500 text-sm">↓</div>
 
             <div class="rounded-2xl border border-white/10 bg-white/5 p-4 md:p-5">
-              <div class="flex items-start gap-3 md:gap-4">
-                <div class="w-14 md:w-16 shrink-0 flex justify-center">
-                  <div class="h-10 px-2 rounded-full bg-yellow-400/20 border border-yellow-300/40 flex items-center justify-center gap-1 text-sm">
-                    <span>🔥</span>
-                    <span>❤️</span>
-                    <span>👍</span>
-                  </div>
+              <div class="flex flex-col items-center text-center gap-3">
+                <div class="h-10 px-2 rounded-full bg-yellow-400/20 border border-yellow-300/40 flex items-center justify-center gap-1 text-sm">
+                  <span>🔥</span>
+                  <span>❤️</span>
+                  <span>👍</span>
                 </div>
                 <div>
                   <p class="text-sm font-semibold">4. Vote, React, Comment</p>
@@ -156,10 +148,8 @@
             <div class="flex justify-center text-slate-500 text-sm">↓</div>
 
             <div class="rounded-2xl border border-white/10 bg-white/5 p-4 md:p-5">
-              <div class="flex items-start gap-3 md:gap-4">
-                <div class="w-14 md:w-16 shrink-0 flex justify-center">
-                  <div class="w-10 h-10 rounded-full bg-pink-400/20 border border-pink-300/40 flex items-center justify-center text-lg">📊</div>
-                </div>
+              <div class="flex flex-col items-center text-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-pink-400/20 border border-pink-300/40 flex items-center justify-center text-lg">📊</div>
                 <div>
                   <p class="text-sm font-semibold">5. Close Voting and Finalize</p>
                   <p class="text-xs text-slate-300 mt-1">Review analytics in the summary, reorder songs, and add keys, notes, and voice memos.</p>

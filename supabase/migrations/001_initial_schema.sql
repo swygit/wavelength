@@ -86,7 +86,15 @@ create policy "Owners can update gigs"
 create policy "Owners can delete gigs"
   on public.gigs for delete
   to authenticated
-  using (owner_id = auth.uid());
+  using (
+    owner_id = auth.uid()
+    and not exists (
+      select 1
+      from public.gig_members
+      where gig_members.gig_id = gigs.id
+        and gig_members.user_id <> auth.uid()
+    )
+  );
 
 -- =========================================
 -- GIG MEMBERS
@@ -395,3 +403,169 @@ alter publication supabase_realtime add table public.songs;
 alter publication supabase_realtime add table public.votes;
 alter publication supabase_realtime add table public.reactions;
 alter publication supabase_realtime add table public.comments;
+
+-- =========================================
+-- MEMBER LEAVE + OWNER TRANSFER WORKFLOW
+-- =========================================
+
+-- Cleanup side effects when a member leaves a gig.
+create or replace function public.cleanup_gig_member_data_on_leave()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- Remove departing member interactions on songs in this gig.
+  delete from public.votes
+  where user_id = old.user_id
+    and song_id in (
+      select id from public.songs where gig_id = old.gig_id
+    );
+
+  delete from public.reactions
+  where user_id = old.user_id
+    and song_id in (
+      select id from public.songs where gig_id = old.gig_id
+    );
+
+  delete from public.comments
+  where user_id = old.user_id
+    and song_id in (
+      select id from public.songs where gig_id = old.gig_id
+    );
+
+  -- Remove songs added by departing member in this gig.
+  -- Cascades remove votes/reactions/comments on those songs.
+  delete from public.songs
+  where gig_id = old.gig_id
+    and added_by = old.user_id;
+
+  return old;
+end;
+$$;
+
+drop trigger if exists on_gig_member_left_cleanup on public.gig_members;
+create trigger on_gig_member_left_cleanup
+after delete on public.gig_members
+for each row execute procedure public.cleanup_gig_member_data_on_leave();
+
+-- Prevent direct owner leave without transfer.
+create or replace function public.prevent_owner_leave_without_transfer()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if exists (
+    select 1
+    from public.gigs
+    where id = old.gig_id
+      and owner_id = old.user_id
+  ) then
+    raise exception 'Owner must transfer ownership before leaving this gig.';
+  end if;
+
+  return old;
+end;
+$$;
+
+drop trigger if exists on_owner_leave_guard on public.gig_members;
+create trigger on_owner_leave_guard
+before delete on public.gig_members
+for each row execute procedure public.prevent_owner_leave_without_transfer();
+
+-- =========================================
+-- USER NOTIFICATIONS (LEADER ASSIGNED)
+-- =========================================
+
+create table if not exists public.user_notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  gig_id uuid references public.gigs(id) on delete cascade,
+  type text not null check (type in ('leader_assigned')),
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  read_at timestamptz
+);
+
+alter table public.user_notifications enable row level security;
+
+create policy "Users can view their own notifications"
+  on public.user_notifications for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+create policy "Users can update their own notifications"
+  on public.user_notifications for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- Owner-only transfer-and-leave workflow.
+-- Also creates a one-time leader-assigned notification for the new owner.
+create or replace function public.transfer_gig_ownership_and_leave(target_gig_id uuid, new_owner_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  caller_id uuid := auth.uid();
+begin
+  if caller_id is null then
+    raise exception 'Not authenticated.';
+  end if;
+
+  if target_gig_id is null or new_owner_user_id is null then
+    raise exception 'Gig and new owner are required.';
+  end if;
+
+  if caller_id = new_owner_user_id then
+    raise exception 'Select a different member as the new owner.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.gigs
+    where id = target_gig_id
+      and owner_id = caller_id
+  ) then
+    raise exception 'Only the current owner can transfer ownership.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.gig_members
+    where gig_id = target_gig_id
+      and user_id = new_owner_user_id
+  ) then
+    raise exception 'New owner must already be a member of this gig.';
+  end if;
+
+  update public.gigs
+  set owner_id = new_owner_user_id
+  where id = target_gig_id;
+
+  update public.gig_members
+  set role = 'owner'
+  where gig_id = target_gig_id
+    and user_id = new_owner_user_id;
+
+  insert into public.user_notifications (user_id, gig_id, type, payload)
+  values (
+    new_owner_user_id,
+    target_gig_id,
+    'leader_assigned',
+    jsonb_build_object('assigned_by', caller_id)
+  );
+
+  delete from public.gig_members
+  where gig_id = target_gig_id
+    and user_id = caller_id;
+end;
+$$;
+
+revoke all on function public.transfer_gig_ownership_and_leave(uuid, uuid) from public;
+grant execute on function public.transfer_gig_ownership_and_leave(uuid, uuid) to authenticated;

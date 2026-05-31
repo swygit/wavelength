@@ -55,7 +55,31 @@
     </div>
 
     <div
-      v-if="activeClosedGigNotice"
+      v-if="activeLeaderNotice"
+      class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      @click.self="dismissLeaderNotice"
+    >
+      <div class="w-full max-w-lg card border border-yellow-500/40">
+        <p class="text-xs uppercase tracking-wide text-yellow-300">Leadership Update</p>
+        <h2 class="text-lg font-bold mt-1">You were assigned as group leader</h2>
+        <p class="text-sm text-gray-300 mt-3 leading-relaxed">
+          You are now leading <span class="font-semibold text-white">{{ activeLeaderNotice.gigName }}</span>. You can manage voting and transfer leadership when needed.
+        </p>
+        <div class="mt-5 flex flex-col sm:flex-row sm:justify-end gap-2">
+          <button class="btn-secondary text-sm w-full sm:w-auto" @click="dismissLeaderNotice">Not now</button>
+          <RouterLink
+            :to="`/gigs/${activeLeaderNotice.gigId}`"
+            class="btn-primary text-sm w-full sm:w-auto"
+            @click="openGigFromLeaderNotice"
+          >
+            Open gig
+          </RouterLink>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-else-if="activeClosedGigNotice"
       class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
       @click.self="dismissClosedGigNotice"
     >
@@ -88,15 +112,52 @@ import AppLayout from '../components/AppLayout.vue'
 import AppLoading from '../components/AppLoading.vue'
 import { useGigStore } from '../stores/gigs'
 import { useAuthStore } from '../stores/auth'
+import { supabase } from '../lib/supabase'
 
 const gigStore = useGigStore()
 const authStore = useAuthStore()
 const { gigs, loading } = storeToRefs(gigStore)
 const fetchError = ref(null)
 const pendingClosedGigNotices = ref([])
+const pendingLeaderNotices = ref([])
 
 const closedNoticeStorageKey = computed(() => `wavelength.closedGigNotices.${authStore.user?.id || 'anon'}`)
 const activeClosedGigNotice = computed(() => pendingClosedGigNotices.value[0] || null)
+const activeLeaderNotice = computed(() => pendingLeaderNotices.value[0] || null)
+
+async function fetchLeaderAssignmentNotices() {
+  if (!authStore.user?.id) {
+    pendingLeaderNotices.value = []
+    return
+  }
+
+  const { data, error } = await supabase
+    .from('user_notifications')
+    .select('id, gig_id, created_at, gigs(name)')
+    .eq('user_id', authStore.user.id)
+    .eq('type', 'leader_assigned')
+    .is('read_at', null)
+    .order('created_at', { ascending: true })
+
+  if (error) throw new Error(error.message || 'Failed to load leader notifications.')
+
+  pendingLeaderNotices.value = (data ?? []).map((notice) => ({
+    id: notice.id,
+    gigId: notice.gig_id,
+    gigName: notice.gigs?.name || 'your gig',
+  }))
+}
+
+async function markLeaderNoticeRead(noticeId) {
+  const { error } = await supabase
+    .from('user_notifications')
+    .update({ read_at: new Date().toISOString() })
+    .eq('id', noticeId)
+
+  if (error) {
+    throw new Error(error.message || 'Failed to update leader notification.')
+  }
+}
 
 function getSeenClosedGigIds() {
   try {
@@ -138,6 +199,21 @@ function dismissClosedGigNotice() {
   pendingClosedGigNotices.value = pendingClosedGigNotices.value.slice(1)
 }
 
+async function dismissLeaderNotice() {
+  const current = activeLeaderNotice.value
+  if (!current) return
+  try {
+    await markLeaderNoticeRead(current.id)
+  } catch {
+    // Keep moving so users are not blocked by transient notification errors.
+  }
+  pendingLeaderNotices.value = pendingLeaderNotices.value.slice(1)
+}
+
+async function openGigFromLeaderNotice() {
+  await dismissLeaderNotice()
+}
+
 function viewSummaryFromNotice() {
   dismissClosedGigNotice()
 }
@@ -145,6 +221,7 @@ function viewSummaryFromNotice() {
 onMounted(async () => {
   try {
     await gigStore.fetchMyGigs()
+    await fetchLeaderAssignmentNotices()
     queueClosedGigNotices()
   } catch (e) {
     fetchError.value = e.message
