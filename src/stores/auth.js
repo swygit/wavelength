@@ -3,6 +3,8 @@ import { ref, computed } from 'vue'
 import { supabase } from '../lib/supabase'
 
 export const useAuthStore = defineStore('auth', () => {
+  const PROFILE_WRITE_TIMEOUT = 12000
+  const AVATAR_UPLOAD_TIMEOUT = 12000
   const user = ref(null)
   const profile = ref(null)
   const loading = ref(true)
@@ -139,11 +141,16 @@ export const useAuthStore = defineStore('auth', () => {
       const { data, error } = await withTimeout(
         supabase
           .from('profiles')
-          .update(profileUpdates)
-          .eq('id', user.value.id)
+          .upsert(
+            {
+              id: user.value.id,
+              ...profileUpdates,
+            },
+            { onConflict: 'id' }
+          )
           .select()
           .single(),
-        3000,
+        PROFILE_WRITE_TIMEOUT,
         'Saving profile timed out. Please try again.'
       )
       if (error) throw error
@@ -183,7 +190,7 @@ export const useAuthStore = defineStore('auth', () => {
       supabase.storage
         .from('avatars')
         .upload(path, file, { upsert: true, contentType: file.type }),
-      3000,
+      AVATAR_UPLOAD_TIMEOUT,
       'Uploading avatar timed out. Please check your connection and storage setup.'
     )
     if (error) throw error
