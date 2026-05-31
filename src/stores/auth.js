@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 export const useAuthStore = defineStore('auth', () => {
   const PROFILE_WRITE_TIMEOUT = 12000
   const AVATAR_UPLOAD_TIMEOUT = 12000
+  const SIGNOUT_TIMEOUT = 8000
   const user = ref(null)
   const profile = ref(null)
   const loading = ref(true)
@@ -116,11 +117,21 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function signOut() {
-    const { error } = await supabase.auth.signOut()
-    if (error) throw error
-    // Clear local auth state immediately to avoid route-guard race conditions.
+    // Clear local auth state immediately so UI navigation never blocks on network.
     user.value = null
     profile.value = null
+
+    // Best-effort server sign-out in background.
+    withRetry(
+      () => withTimeout(supabase.auth.signOut(), SIGNOUT_TIMEOUT, 'Signing out timed out.'),
+      1
+    )
+      .then(({ error }) => {
+        if (error) throw error
+      })
+      .catch((e) => {
+        console.warn('Server sign-out failed after local sign-out:', e)
+      })
   }
 
   async function updateProfile(updates) {
@@ -138,20 +149,24 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     if (Object.keys(profileUpdates).length > 0) {
-      const { data, error } = await withTimeout(
-        supabase
-          .from('profiles')
-          .upsert(
-            {
-              id: user.value.id,
-              ...profileUpdates,
-            },
-            { onConflict: 'id' }
-          )
-          .select()
-          .single(),
-        PROFILE_WRITE_TIMEOUT,
-        'Saving profile timed out. Please try again.'
+      const { data, error } = await withRetry(
+        () =>
+          withTimeout(
+            supabase
+              .from('profiles')
+              .upsert(
+                {
+                  id: user.value.id,
+                  ...profileUpdates,
+                },
+                { onConflict: 'id' }
+              )
+              .select()
+              .single(),
+            PROFILE_WRITE_TIMEOUT,
+            'Saving profile timed out. Please try again.'
+          ),
+        1
       )
       if (error) throw error
       profile.value = {

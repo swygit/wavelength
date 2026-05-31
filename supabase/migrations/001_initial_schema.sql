@@ -71,6 +71,11 @@ create policy "Users can update their own profile"
   to authenticated
   using (auth.uid() = id);
 
+create policy "Users can insert their own profile"
+  on public.profiles for insert
+  to authenticated
+  with check (auth.uid() = id);
+
 -- =========================================
 -- GIGS
 -- =========================================
