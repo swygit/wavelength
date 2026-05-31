@@ -46,6 +46,20 @@ create trigger on_auth_user_updated
   after update of raw_user_meta_data on auth.users
   for each row execute procedure public.handle_auth_user_updated();
 
+-- Drop all existing RLS policies so this file is safe to re-run
+do $$ declare
+  pol record;
+begin
+  for pol in
+    select policyname, tablename
+    from pg_policies
+    where schemaname = 'public'
+      and tablename in ('profiles','gigs','gig_members','songs','votes','reactions','comments','user_notifications')
+  loop
+    execute format('drop policy if exists %I on public.%I', pol.policyname, pol.tablename);
+  end loop;
+end $$;
+
 -- RLS: users can read all profiles (needed for displaying member names)
 create policy "Profiles are viewable by authenticated users"
   on public.profiles for select
@@ -399,10 +413,12 @@ create policy "Users can delete their own comments"
 -- =========================================
 -- REALTIME: enable for relevant tables
 -- =========================================
-alter publication supabase_realtime add table public.songs;
-alter publication supabase_realtime add table public.votes;
-alter publication supabase_realtime add table public.reactions;
-alter publication supabase_realtime add table public.comments;
+do $$ begin
+  begin alter publication supabase_realtime add table public.songs;    exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table public.votes;     exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table public.reactions;  exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table public.comments;   exception when duplicate_object then null; end;
+end $$;
 
 -- =========================================
 -- MEMBER LEAVE + OWNER TRANSFER WORKFLOW
