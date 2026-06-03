@@ -843,14 +843,14 @@ declare
   last_visit timestamptz;
   result jsonb;
 begin
-  -- Get the user's last visit time
-  select last_visited_at into last_visit
+  -- Get the user's last visit time (fall back to joined_at for first visit)
+  select coalesce(last_visited_at, joined_at) into last_visit
   from public.gig_members
   where gig_id = target_gig_id
     and user_id = caller_id;
 
   if last_visit is null then
-    -- First visit, no activity to summarize
+    -- Not a member of this gig
     return jsonb_build_object(
       'new_songs', 0,
       'vote_updates', jsonb_build_array(),
@@ -876,7 +876,7 @@ begin
       count(distinct v.user_id) as vote_count
     from public.songs s
     inner join public.votes v on v.song_id = s.id
-      and v.created_at > last_visit
+      and v.voted_at > last_visit
       and v.value != 0
     where s.gig_id = target_gig_id
       and s.added_by = caller_id
@@ -954,3 +954,23 @@ begin
     and user_id = caller_id;
 end;
 $$;
+
+-- Trigger to track vote timestamps (voted_at updates on any change to non-zero)
+create or replace function public.update_vote_timestamp()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  -- Update voted_at when value changes to non-zero (new vote or changed vote)
+  if new.value != 0 and old.value != new.value then
+    new.voted_at = now();
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_vote_updated on public.votes;
+create trigger on_vote_updated
+before update on public.votes
+for each row execute procedure public.update_vote_timestamp();

@@ -140,8 +140,8 @@
                   v-model="songsSort"
                   class="w-full bg-gray-800 border border-gray-700 text-xs rounded px-2 py-1.5 text-gray-200 focus:outline-none focus:border-brand-500"
                 >
-                  <option value="dateAddedOldest">Date added (oldest first)</option>
                   <option value="dateAddedNewest">Date added (newest first)</option>
+                  <option value="dateAddedOldest">Date added (oldest first)</option>
                   <option value="titleAsc">Title (A-Z)</option>
                   <option value="titleDesc">Title (Z-A)</option>
                 </select>
@@ -346,7 +346,7 @@ const statusError = ref(null)
 const selectedSongId = ref(null)
 const songsSearch = ref('')
 const songsFilter = ref('all')
-const songsSort = ref('dateAddedOldest')
+const songsSort = ref('dateAddedNewest')
 const showLeaveModal = ref(false)
 const showOwnerLeaveModal = ref(false)
 const leaveSaving = ref(false)
@@ -468,6 +468,8 @@ onMounted(async () => {
       activitySummary.value = summary
       showActivityNotif.value = true
     }
+    // Update last_visited_at now so next visit can detect new activity
+    await songStore.updateLastVisited(gigId)
   } catch (e) {
     gigError.value = e.message
   } finally {
@@ -495,8 +497,6 @@ function subscribeMembershipChanges() {
 
 function closeActivityNotif() {
   showActivityNotif.value = false
-  // Update last_visited_at after showing the notification
-  songStore.updateLastVisited(gigId)
 }
 
 async function refreshGig() {

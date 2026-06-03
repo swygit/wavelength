@@ -35,9 +35,9 @@
 
           <!-- Vote updates -->
           <div v-for="vote in summary.vote_updates" :key="`vote-${vote.song_id}`" class="flex items-start gap-3 p-3 rounded-lg bg-green-900/20 border border-green-700/40">
-            <span class="text-lg">👍</span>
+            <span class="text-lg">&#x1F60F;</span>
             <div>
-              <span class="font-semibold text-green-300">{{ vote.count }} new {{ vote.count === 1 ? 'vote' : 'votes' }} on</span>
+              <span class="font-semibold text-green-300">{{ vote.count }} new or changed {{ vote.count === 1 ? 'vote' : 'votes' }} on</span>
               <p class="text-gray-200 truncate">{{ vote.title }}</p>
             </div>
           </div>
