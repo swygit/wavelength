@@ -108,7 +108,15 @@
       <div class="flex-1 min-w-0 sm:pr-40">
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
-            <div class="font-semibold truncate">{{ song.title }}</div>
+            <div class="flex items-center gap-2 min-w-0">
+              <span
+                v-if="addedOrder"
+                class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-700 text-[11px] font-semibold text-gray-200 flex-shrink-0"
+              >
+                {{ addedOrder }}
+              </span>
+              <div class="font-semibold truncate">{{ song.title }}</div>
+            </div>
             <div class="text-sm text-gray-400 truncate">{{ song.artist }}</div>
             <div class="text-xs text-gray-500 truncate">{{ song.album }}</div>
             <!-- Added by -->
@@ -295,9 +303,10 @@ const props = defineProps({
   votingOpen: { type: Boolean, default: true },
   selected: { type: Boolean, default: false },
   membersMap: { type: Object, default: () => ({}) },
+  addedOrder: { type: Number, default: null },
 })
 
-const emit = defineEmits(['select'])
+const emit = defineEmits(['select', 'deleted'])
 
 const songStore = useSongStore()
 const authStore = useAuthStore()
@@ -348,7 +357,14 @@ function confirmDeleteSong() {
 async function deleteSong() {
   isDeleting.value = true
   try {
-    await songStore.removeSong(props.song.id)
+    await songStore.removeSong(props.song.id, {
+      onSuccess: (removedSong) => {
+        emit('deleted', {
+          title: removedSong?.title || props.song.title,
+          artist: removedSong?.artist || props.song.artist,
+        })
+      },
+    })
     showDeleteModal.value = false
   } catch (e) {
     deleteError.value = e.message || 'Failed to delete song.'

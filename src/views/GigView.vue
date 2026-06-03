@@ -66,21 +66,111 @@
             <div class="text-4xl mb-3">🎵</div>
             <p>No songs yet. Search and add songs above.</p>
           </div>
+          <div v-else-if="!filteredAndSortedSongs.length" class="card text-center py-10 text-gray-400">
+            <div class="text-4xl mb-3">🔎</div>
+            <p>No songs match your current search, filter, or sort settings.</p>
+          </div>
           <SongCard
             v-else
-            v-for="song in songs"
+            v-for="song in filteredAndSortedSongs"
             :key="song.id"
             :song="song"
             :voting-open="gig.status === 'open'"
             :selected="song.id === selectedSongId"
             :members-map="membersMap"
+            :added-order="songAddedOrderMap[song.id]"
             @select="selectSong"
+            @deleted="onSongDeleted"
           />
         </div>
 
         <!-- Sidebar (right) -->
         <div class="space-y-4">
           <SongPlayer v-if="selectedSong" :song="selectedSong" @clear="selectedSongId = null" />
+
+          <div class="card">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="font-semibold">Songs Added</h2>
+              <span class="text-xs text-gray-400">{{ filteredSongs.length }}/{{ songs.length }}</span>
+            </div>
+
+            <div class="mb-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div class="sm:col-span-2">
+                <label for="songsSearch" class="block text-[11px] uppercase tracking-wide text-gray-500 mb-1">Search</label>
+                <input
+                  id="songsSearch"
+                  v-model="songsSearch"
+                  type="text"
+                  class="w-full bg-gray-800 border border-gray-700 text-xs rounded px-2 py-1.5 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                  placeholder="Search title or artist…"
+                />
+              </div>
+
+              <div>
+                <label for="songsFilter" class="block text-[11px] uppercase tracking-wide text-gray-500 mb-1">Filter</label>
+                <select
+                  id="songsFilter"
+                  v-model="songsFilter"
+                  class="w-full bg-gray-800 border border-gray-700 text-xs rounded px-2 py-1.5 text-gray-200 focus:outline-none focus:border-brand-500"
+                >
+                  <option value="all">All songs</option>
+                  <option value="notVoted">Songs not voted on</option>
+                  <option value="voted">Songs voted on</option>
+                  <option value="addedByYou">Songs added by you</option>
+                  <option value="notAddedByYou">Songs not added by you</option>
+                </select>
+              </div>
+
+              <div>
+                <label for="songsSort" class="block text-[11px] uppercase tracking-wide text-gray-500 mb-1">Sort</label>
+                <select
+                  id="songsSort"
+                  v-model="songsSort"
+                  class="w-full bg-gray-800 border border-gray-700 text-xs rounded px-2 py-1.5 text-gray-200 focus:outline-none focus:border-brand-500"
+                >
+                  <option value="dateAddedOldest">Date added (oldest first)</option>
+                  <option value="dateAddedNewest">Date added (newest first)</option>
+                  <option value="titleAsc">Title (A-Z)</option>
+                  <option value="titleDesc">Title (Z-A)</option>
+                </select>
+              </div>
+            </div>
+
+            <div v-if="!songs.length" class="text-xs text-gray-400">No songs added yet.</div>
+            <div v-else-if="!filteredSongs.length" class="text-xs text-gray-400">No songs match this filter.</div>
+
+            <div v-else class="max-h-[17.5rem] overflow-y-auto pr-1 space-y-1">
+              <button
+                v-for="song in filteredAndSortedSongs"
+                :key="song.id"
+                type="button"
+                class="w-full text-left rounded-lg border px-2.5 py-2 transition-colors"
+                :class="song.id === selectedSongId
+                  ? 'border-brand-500/60 bg-brand-900/20'
+                  : 'border-gray-700 bg-gray-800/50 hover:bg-gray-800'"
+                @click="selectSong(song)"
+              >
+                <div class="flex items-start justify-between gap-2">
+                  <div class="flex items-start gap-2 min-w-0">
+                    <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-700 text-[11px] font-semibold text-gray-200 mt-0.5">
+                      {{ songAddedOrderMap[song.id] }}
+                    </span>
+                    <div class="min-w-0">
+                      <p class="text-sm text-gray-100 truncate">{{ song.title }}</p>
+                      <p class="text-xs text-gray-400 truncate">{{ song.artist || 'Unknown artist' }}</p>
+                    </div>
+                  </div>
+
+                  <span
+                    class="text-[10px] px-2 py-0.5 rounded-full border flex-shrink-0"
+                    :class="voteStatusBySongId[song.id].tone"
+                  >
+                    {{ voteStatusBySongId[song.id].label }}
+                  </span>
+                </div>
+              </button>
+            </div>
+          </div>
 
           <!-- Members + Naughty List -->
           <NaughtyList :gig="gig" :songs="songs" />
@@ -89,6 +179,21 @@
     </div>
 
     <div v-else-if="!pageLoading" class="text-center py-16 text-gray-400">{{ gigError || 'Gig not found.' }}</div>
+
+    <teleport to="body">
+      <div
+        v-if="deletedSongNotice"
+        class="fixed inset-x-0 bottom-4 z-50 flex justify-end px-4 pointer-events-none"
+      >
+        <div class="w-[min(92vw,24rem)] card border border-red-500/40 bg-gray-900/95 shadow-xl pointer-events-auto">
+          <p class="text-xs uppercase tracking-wide text-red-300">Song removed!</p>
+          <p class="text-sm text-gray-100 mt-1 leading-relaxed">
+            {{ deletedSongNotice.title }}
+            <span v-if="deletedSongNotice.artist" class="text-gray-300"> by {{ deletedSongNotice.artist }}</span>
+          </p>
+        </div>
+      </div>
+    </teleport>
 
     <!-- Close voting confirmation modal -->
     <div
@@ -223,6 +328,9 @@ const showCloseModal = ref(false)
 const statusSaving = ref(false)
 const statusError = ref(null)
 const selectedSongId = ref(null)
+const songsSearch = ref('')
+const songsFilter = ref('all')
+const songsSort = ref('dateAddedOldest')
 const showLeaveModal = ref(false)
 const showOwnerLeaveModal = ref(false)
 const leaveSaving = ref(false)
@@ -231,10 +339,85 @@ const selectedNewOwnerId = ref('')
 const showDeleteModal = ref(false)
 const deleteSaving = ref(false)
 const deleteError = ref('')
+const deletedSongNotice = ref(null)
+let deletedSongNoticeTimer = null
 let membershipChannel = null
 
 const isOwner = computed(() => gig.value?.owner_id === authStore.user?.id)
 const selectedSong = computed(() => songs.value.find((song) => song.id === selectedSongId.value) || null)
+const songAddedOrderMap = computed(() => {
+  const map = {}
+  songs.value.forEach((song, idx) => {
+    map[song.id] = idx + 1
+  })
+  return map
+})
+const voteStatusBySongId = computed(() => {
+  const map = {}
+  const myUserId = authStore.user?.id
+
+  for (const song of songs.value) {
+    if (!myUserId || song.added_by === myUserId) {
+      map[song.id] = {
+        label: 'Added by you',
+        tone: 'border-gray-600 text-gray-300 bg-gray-800/80',
+      }
+      continue
+    }
+
+    const hasVoted = (song.votes || []).some((vote) => vote.user_id === myUserId && vote.value !== 0)
+    map[song.id] = hasVoted
+      ? { label: 'Voted', tone: 'border-green-600/60 text-green-200 bg-green-900/30' }
+      : { label: 'Not voted', tone: 'border-red-600/60 text-red-200 bg-red-900/30' }
+  }
+
+  return map
+})
+const filteredSongs = computed(() => {
+  if (songsFilter.value === 'all') return songs.value
+
+  const myUserId = authStore.user?.id
+
+  return songs.value.filter((song) => {
+    const isAddedByMe = myUserId && song.added_by === myUserId
+    const hasVoted = (song.votes || []).some((vote) => vote.user_id === myUserId && vote.value !== 0)
+
+    if (songsFilter.value === 'addedByYou') return Boolean(isAddedByMe)
+    if (songsFilter.value === 'notAddedByYou') return !isAddedByMe
+    if (songsFilter.value === 'voted') return !isAddedByMe && hasVoted
+    if (songsFilter.value === 'notVoted') return !isAddedByMe && !hasVoted
+
+    return true
+  })
+})
+const searchedFilteredSongs = computed(() => {
+  const query = songsSearch.value.trim().toLowerCase()
+  if (!query) return filteredSongs.value
+
+  return filteredSongs.value.filter((song) => {
+    const title = (song.title || '').toLowerCase()
+    const artist = (song.artist || '').toLowerCase()
+    return title.includes(query) || artist.includes(query)
+  })
+})
+const filteredAndSortedSongs = computed(() => {
+  const list = [...searchedFilteredSongs.value]
+
+  if (songsSort.value === 'dateAddedNewest') {
+    return list.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+  }
+
+  if (songsSort.value === 'titleAsc') {
+    return list.sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' }))
+  }
+
+  if (songsSort.value === 'titleDesc') {
+    return list.sort((a, b) => (b.title || '').localeCompare(a.title || '', undefined, { sensitivity: 'base' }))
+  }
+
+  // Default: keep add order as oldest first.
+  return list.sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
+})
 const membersMap = computed(() => {
   const map = {}
   for (const m of gig.value?.gig_members ?? []) {
@@ -333,6 +516,23 @@ async function reopenVoting() {
 
 function selectSong(song) {
   selectedSongId.value = song.id
+}
+
+function onSongDeleted(songMeta) {
+  if (deletedSongNoticeTimer) {
+    clearTimeout(deletedSongNoticeTimer)
+    deletedSongNoticeTimer = null
+  }
+
+  deletedSongNotice.value = {
+    title: songMeta?.title || 'Song',
+    artist: songMeta?.artist || '',
+  }
+
+  deletedSongNoticeTimer = setTimeout(() => {
+    deletedSongNotice.value = null
+    deletedSongNoticeTimer = null
+  }, 2800)
 }
 
 function openOwnerLeaveModal() {

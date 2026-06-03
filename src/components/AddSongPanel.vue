@@ -101,6 +101,19 @@
 
   <teleport to="body">
     <div
+      v-if="addedSongNotice"
+      class="fixed bottom-4 right-4 z-50 w-[min(92vw,24rem)] card border border-green-500/40 bg-gray-900/95 shadow-xl"
+    >
+      <p class="text-xs uppercase tracking-wide text-green-300">Song Added!</p>
+      <p class="text-sm text-gray-100 mt-1 leading-relaxed">
+        {{ addedSongNotice.title }}
+        <span v-if="addedSongNotice.artist" class="text-gray-300"> by {{ addedSongNotice.artist }}</span>
+      </p>
+    </div>
+  </teleport>
+
+  <teleport to="body">
+    <div
       v-if="showSimilarSongNotice"
       class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
       @click.self="cancelSimilarSong"
@@ -149,6 +162,8 @@ const showDuplicateSongNotice = ref(false)
 const showSimilarSongNotice = ref(false)
 const pendingSimilarSong = ref(null)
 const similarSongMatch = ref(null)
+const addedSongNotice = ref(null)
+let addedSongNoticeTimer = null
 
 async function handleSearch() {
   if (!query.value.trim()) return
@@ -188,6 +203,7 @@ async function addSongInternal(song, skipSimilarCheck) {
     }
 
     await songStore.addSong(props.gigId, song)
+    showAddedSongNotice(song)
     results.value = results.value.filter((r) => (r.spotifyId || r.youtubeId) !== key)
   } catch (e) {
     if (isDuplicateSongError(e)) {
@@ -214,5 +230,22 @@ async function confirmAddSimilarSong() {
   similarSongMatch.value = null
   if (!song) return
   await addSongInternal(song, true)
+}
+
+function showAddedSongNotice(song) {
+  if (addedSongNoticeTimer) {
+    clearTimeout(addedSongNoticeTimer)
+    addedSongNoticeTimer = null
+  }
+
+  addedSongNotice.value = {
+    title: song?.title || 'Song',
+    artist: song?.artist || '',
+  }
+
+  addedSongNoticeTimer = setTimeout(() => {
+    addedSongNotice.value = null
+    addedSongNoticeTimer = null
+  }, 2800)
 }
 </script>

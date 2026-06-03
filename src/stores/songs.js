@@ -276,10 +276,14 @@ export const useSongStore = defineStore('songs', () => {
     return bestMatch
   }
 
-  async function removeSong(songId) {
+  async function removeSong(songId, options = {}) {
+    const onSuccess = typeof options.onSuccess === 'function' ? options.onSuccess : null
     const { error } = await supabase.from('songs').delete().eq('id', songId)
     if (error) throw error
+    const removedSong = songs.value.find((s) => s.id === songId) || null
+    if (onSuccess) onSuccess(removedSong)
     songs.value = songs.value.filter((s) => s.id !== songId)
+    return removedSong
   }
 
   async function castVote(songId, value) {
