@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from './auth'
+import { decodeSongTextFields } from '../lib/text'
 
 export const useSongStore = defineStore('songs', () => {
   const songs = ref([])
@@ -32,12 +33,13 @@ export const useSongStore = defineStore('songs', () => {
 
   async function addSong(gigId, songData) {
     const authStore = useAuthStore()
+    const normalizedSongData = decodeSongTextFields(songData)
     const payload = {
       gig_id: gigId,
       added_by: authStore.user.id,
-      title: songData.title,
-      artist: songData.artist,
-      album: songData.album,
+      title: normalizedSongData.title,
+      artist: normalizedSongData.artist,
+      album: normalizedSongData.album,
       album_art: songData.albumArt,
       preview_url: songData.previewUrl,
       external_url: songData.externalUrl,
@@ -313,10 +315,11 @@ export const useSongStore = defineStore('songs', () => {
   function enrichSong(song) {
     const authStore = useAuthStore()
     const userId = authStore.user?.id
+    const normalizedSong = decodeSongTextFields(song)
     return {
-      ...song,
-      score: calcScore(song.votes ?? []),
-      myVote: (song.votes ?? []).find((v) => v.user_id === userId)?.value ?? null,
+      ...normalizedSong,
+      score: calcScore(normalizedSong.votes ?? []),
+      myVote: (normalizedSong.votes ?? []).find((v) => v.user_id === userId)?.value ?? null,
     }
   }
 

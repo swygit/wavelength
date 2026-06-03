@@ -85,6 +85,7 @@
 import { ref } from 'vue'
 import { searchSpotifyTracks } from '../lib/spotify'
 import { searchYouTubeVideos } from '../lib/youtube'
+import { decodeSongTextFields } from '../lib/text'
 import { useSongStore } from '../stores/songs'
 
 const props = defineProps({ gigId: { type: String, required: true } })
@@ -110,9 +111,9 @@ async function handleSearch() {
   results.value = []
   try {
     if (activeSource.value === 'spotify') {
-      results.value = await searchSpotifyTracks(query.value)
+      results.value = (await searchSpotifyTracks(query.value)).map(decodeSongTextFields)
     } else {
-      results.value = await searchYouTubeVideos(query.value)
+      results.value = (await searchYouTubeVideos(query.value)).map(decodeSongTextFields)
     }
   } catch (e) {
     searchError.value = e.message

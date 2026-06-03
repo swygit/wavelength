@@ -32,7 +32,7 @@
       <!-- KPI summary -->
       <div v-if="orderedSongs.length" class="grid grid-cols-3 gap-3 mb-6">
         <div class="card border-green-700/50 bg-gradient-to-b from-green-900/35 to-gray-900">
-          <p class="text-[11px] uppercase tracking-wide text-green-300/90">MOST LIKES</p>
+          <p class="text-[11px] uppercase tracking-wide text-green-300/90">HIGHEST RATED</p>
           <p class="mt-1 text-sm font-semibold truncate">{{ highestRatedSong?.title || 'No songs yet' }}</p>
           <p class="text-xs text-gray-400 truncate">{{ highestRatedSong?.artist || 'Waiting for data' }}</p>
           <div class="mt-3 inline-flex items-center gap-1.5 rounded-full border border-green-600/50 bg-green-900/30 px-2.5 py-1 text-xs text-green-200">
