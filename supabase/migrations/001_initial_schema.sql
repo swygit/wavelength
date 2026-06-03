@@ -102,19 +102,6 @@ create policy "Owners can update gigs"
   to authenticated
   using (owner_id = auth.uid());
 
-create policy "Owners can delete gigs"
-  on public.gigs for delete
-  to authenticated
-  using (
-    owner_id = auth.uid()
-    and not exists (
-      select 1
-      from public.gig_members
-      where gig_members.gig_id = gigs.id
-        and gig_members.user_id <> auth.uid()
-    )
-  );
-
 -- =========================================
 -- GIG MEMBERS
 -- =========================================
@@ -180,6 +167,19 @@ create policy "Gig members can view their gigs"
       select 1 from public.gig_members
       where gig_members.gig_id = gigs.id
         and gig_members.user_id = auth.uid()
+    )
+  );
+
+create policy "Owners can delete gigs"
+  on public.gigs for delete
+  to authenticated
+  using (
+    owner_id = auth.uid()
+    and not exists (
+      select 1
+      from public.gig_members
+      where gig_members.gig_id = gigs.id
+        and gig_members.user_id <> auth.uid()
     )
   );
 

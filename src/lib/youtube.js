@@ -1,9 +1,9 @@
 /**
  * YouTube Data API v3 helpers.
- * Used as a fallback when a Spotify preview is unavailable.
+ * Uses a server-side Supabase Edge Function to keep API keys out of the client.
  */
 
-const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3'
+import { supabase } from './supabase'
 
 /**
  * Search YouTube for a video matching the given song.
@@ -12,44 +12,19 @@ const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3'
  * @returns {Promise<Array>}
  */
 export async function searchYouTubeVideos(query, maxResults = 5) {
-  const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY
-  if (!apiKey) throw new Error('YouTube API key not configured.')
+  const { data, error } = await supabase.functions.invoke('youtube-search', {
+    body: { query, maxResults },
+  })
 
-  const url = new URL(YOUTUBE_API_BASE + '/search')
-  url.searchParams.set('key', apiKey)
-  url.searchParams.set('q', query)
-  url.searchParams.set('part', 'snippet')
-  url.searchParams.set('type', 'video')
-  url.searchParams.set('videoEmbeddable', 'true')
-  url.searchParams.set('videoSyndicated', 'true')
-  url.searchParams.set('videoCategoryId', '10') // Music category
-  url.searchParams.set('maxResults', String(maxResults))
-
-  const res = await fetch(url.toString())
-  if (!res.ok) {
-    let message = 'YouTube search failed'
-    try {
-      const err = await res.json()
-      const apiMessage = err?.error?.message
-      if (apiMessage) message = `YouTube search failed: ${apiMessage}`
-    } catch {
-      // Ignore parse errors and keep default message.
-    }
-    throw new Error(message)
+  if (error) {
+    throw new Error(error.message || 'YouTube search failed')
   }
 
-  const data = await res.json()
-  return (data.items ?? []).map((item) => ({
-    source: 'youtube',
-    youtubeId: item.id.videoId,
-    title: item.snippet.title,
-    artist: item.snippet.channelTitle,
-    album: null,
-    albumArt: item.snippet.thumbnails?.medium?.url ?? null,
-    previewUrl: null,
-    externalUrl: `https://www.youtube.com/watch?v=${item.id.videoId}`,
-    durationMs: null,
-  }))
+  if (!Array.isArray(data)) {
+    throw new Error('YouTube search failed')
+  }
+
+  return data
 }
 
 /**
