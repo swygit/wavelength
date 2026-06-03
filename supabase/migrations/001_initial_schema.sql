@@ -820,3 +820,137 @@ create policy "Gig members can delete voice memos"
         and gig_members.user_id = auth.uid()
     )
   );
+
+-- =========================================
+-- ACTIVITY TRACKING: last visited + summary
+-- =========================================
+
+-- Add last_visited_at to gig_members for activity tracking
+alter table if exists public.gig_members
+  add column if not exists last_visited_at timestamptz default now();
+
+-- Helper function to get activity summary while user was away from a gig
+create or replace function public.get_gig_activity_summary(
+  target_gig_id uuid,
+  caller_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  last_visit timestamptz;
+  result jsonb;
+begin
+  -- Get the user's last visit time
+  select last_visited_at into last_visit
+  from public.gig_members
+  where gig_id = target_gig_id
+    and user_id = caller_id;
+
+  if last_visit is null then
+    -- First visit, no activity to summarize
+    return jsonb_build_object(
+      'new_songs', 0,
+      'vote_updates', jsonb_build_array(),
+      'reaction_updates', jsonb_build_array(),
+      'comment_updates', jsonb_build_array()
+    );
+  end if;
+
+  -- Count new songs added after last visit (exclude cancelled songs and own songs)
+  with new_songs_count as (
+    select count(*) as count
+    from public.songs
+    where gig_id = target_gig_id
+      and created_at > last_visit
+      and is_cancelled = false
+      and added_by != caller_id
+  ),
+  -- Get songs with NEW votes (first-time votes, not changed votes) after last visit
+  vote_updates as (
+    select
+      s.id,
+      s.title,
+      count(distinct v.user_id) as vote_count
+    from public.songs s
+    inner join public.votes v on v.song_id = s.id
+      and v.created_at > last_visit
+      and v.value != 0
+    where s.gig_id = target_gig_id
+      and s.added_by = caller_id
+      and s.is_cancelled = false
+    group by s.id, s.title
+  ),
+  -- Get reactions per song after last visit (aggregated by song)
+  reaction_updates as (
+    select
+      s.id,
+      s.title,
+      count(distinct r.id) as reaction_count
+    from public.songs s
+    inner join public.reactions r on r.song_id = s.id
+      and r.created_at > last_visit
+    where s.gig_id = target_gig_id
+      and s.added_by = caller_id
+      and s.is_cancelled = false
+    group by s.id, s.title
+  ),
+  -- Get comments per song after last visit (aggregated by song)
+  comment_updates as (
+    select
+      s.id,
+      s.title,
+      count(distinct c.id) as comment_count
+    from public.songs s
+    inner join public.comments c on c.song_id = s.id
+      and c.created_at > last_visit
+    where s.gig_id = target_gig_id
+      and s.added_by = caller_id
+      and s.is_cancelled = false
+    group by s.id, s.title
+  )
+  select jsonb_build_object(
+    'new_songs', (select count from new_songs_count),
+    'vote_updates', coalesce((
+      select jsonb_agg(
+        jsonb_build_object('song_id', id, 'title', title, 'count', vote_count)
+      )
+      from vote_updates
+    ), jsonb_build_array()),
+    'reaction_updates', coalesce((
+      select jsonb_agg(
+        jsonb_build_object('song_id', id, 'title', title, 'count', reaction_count)
+      )
+      from reaction_updates
+    ), jsonb_build_array()),
+    'comment_updates', coalesce((
+      select jsonb_agg(
+        jsonb_build_object('song_id', id, 'title', title, 'count', comment_count)
+      )
+      from comment_updates
+    ), jsonb_build_array())
+  ) into result;
+
+  return result;
+end;
+$$;
+
+-- Function to update last_visited_at for a user in a gig
+create or replace function public.update_last_visited(
+  target_gig_id uuid,
+  caller_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.gig_members
+  set last_visited_at = now()
+  where gig_id = target_gig_id
+    and user_id = caller_id;
+end;
+$$;

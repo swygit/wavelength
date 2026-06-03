@@ -1,5 +1,7 @@
 <template>
   <AppLayout>
+    <AwayNotification :model-value="showActivityNotif" :summary="activitySummary" @close="closeActivityNotif" />
+
     <AppLoading v-if="pageLoading" />
 
     <div v-else-if="gig" class="max-w-5xl mx-auto">
@@ -9,23 +11,30 @@
           <RouterLink to="/dashboard" class="text-sm text-gray-400 hover:text-white inline-flex items-center gap-1 mb-2">
             ← Dashboard
           </RouterLink>
-          <h1 class="text-2xl font-bold">{{ gig.name }}</h1>
+          <div class="flex items-center gap-2 mb-2">
+            <h1 class="text-2xl font-bold">{{ gig.name }}</h1>
+            <span class="text-xs px-2 py-1 rounded-full"
+              :class="gig.status === 'open' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'"
+            >
+              {{ gig.status === 'open' ? 'Voting Open' : 'Voting Closed' }}
+            </span>
+          </div>
           <p v-if="gig.description" class="text-gray-400 text-sm mt-1">{{ gig.description }}</p>
         </div>
         <div class="flex flex-wrap gap-2 items-center">
-          <!-- Status -->
-          <span class="text-xs px-2 py-1 rounded-full"
-            :class="gig.status === 'open' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'"
-          >
-            {{ gig.status === 'open' ? 'Voting Open' : 'Voting Closed' }}
-          </span>
-
           <!-- Owner controls -->
           <template v-if="isOwner">
-            <button v-if="gig.status === 'open'" class="btn-danger text-sm" @click="showCloseModal = true">Close voting</button>
-            <button v-if="gig.status === 'closed'" class="btn-secondary text-sm" @click="reopenVoting">Reopen voting</button>
-            <RouterLink v-if="gig.status === 'closed'" :to="`/gigs/${gig.id}/summary`" class="btn-primary text-sm">View summary</RouterLink>
-            <button class="btn-secondary text-sm" :disabled="transferableMembers.length === 0" :title="transferableMembers.length === 0 ? 'No other members to transfer to' : undefined" @click="openOwnerLeaveModal">Transfer & leave</button>
+            <button v-if="gig.status === 'open'" class="btn-danger text-sm h-[2.375rem] inline-flex items-center" @click="showCloseModal = true">Close voting</button>
+            <button v-if="gig.status === 'closed'" class="btn-secondary text-sm h-[2.375rem] inline-flex items-center" @click="reopenVoting">Reopen voting</button>
+            <RouterLink v-if="gig.status === 'closed'" :to="`/gigs/${gig.id}/summary`" class="btn-primary text-sm h-[2.375rem] inline-flex items-center">View summary</RouterLink>
+            <button
+              class="text-sm h-[2.375rem] px-3 rounded-lg border border-amber-600/70 bg-amber-900/30 text-amber-200 hover:bg-amber-900/45 transition-colors inline-flex items-center disabled:opacity-60 disabled:cursor-not-allowed"
+              :disabled="transferableMembers.length === 0"
+              :title="transferableMembers.length === 0 ? 'No other members to transfer to' : undefined"
+              @click="openOwnerLeaveModal"
+            >
+              Transfer & leave
+            </button>
             <button
               v-if="canDeleteGig"
               class="btn-danger text-sm px-3 py-0 h-[2.375rem] flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
@@ -45,21 +54,26 @@
             </button>
           </template>
           <template v-else>
-            <RouterLink v-if="gig.status === 'closed'" :to="`/gigs/${gig.id}/summary`" class="btn-secondary text-sm">View summary</RouterLink>
-            <button class="btn-secondary text-sm" :disabled="leaveSaving" @click="showLeaveModal = true">
+            <RouterLink v-if="gig.status === 'closed'" :to="`/gigs/${gig.id}/summary`" class="btn-secondary text-sm h-[2.375rem] inline-flex items-center">View summary</RouterLink>
+            <button
+              class="text-sm h-[2.375rem] px-3 rounded-lg border border-amber-600/70 bg-amber-900/30 text-amber-200 hover:bg-amber-900/45 transition-colors inline-flex items-center disabled:opacity-60 disabled:cursor-not-allowed"
+              :disabled="leaveSaving"
+              @click="showLeaveModal = true"
+            >
               {{ leaveSaving ? 'Leaving…' : 'Leave gig' }}
             </button>
           </template>
         </div>
       </div>
 
+      <div class="mb-4">
+        <AddSongPanel v-if="gig.status === 'open'" :gig-id="gigId" />
+      </div>
+
       <!-- Two-column layout -->
       <div class="grid lg:grid-cols-3 gap-6">
         <!-- Song list (left / main) -->
         <div class="lg:col-span-2 space-y-4">
-          <!-- Add Song -->
-          <AddSongPanel v-if="gig.status === 'open'" :gig-id="gigId" />
-
           <!-- Songs -->
           <AppLoading v-if="songStore.loading" />
           <div v-else-if="!songs.length" class="card text-center py-10 text-gray-400">
@@ -86,8 +100,6 @@
 
         <!-- Sidebar (right) -->
         <div class="space-y-4">
-          <SongPlayer v-if="selectedSong" :song="selectedSong" @clear="selectedSongId = null" />
-
           <div class="card">
             <div class="flex items-center justify-between mb-3">
               <h2 class="font-semibold">Songs Added</h2>
@@ -172,7 +184,10 @@
             </div>
           </div>
 
-          <!-- Members + Naughty List -->
+          <div ref="songPlayerRef">
+            <SongPlayer v-if="selectedSong" :song="selectedSong" @clear="selectedSongId = null" />
+          </div>
+
           <NaughtyList :gig="gig" :songs="songs" />
         </div>
       </div>
@@ -296,7 +311,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import AppLayout from '../components/AppLayout.vue'
@@ -305,6 +320,7 @@ import AddSongPanel from '../components/AddSongPanel.vue'
 import SongCard from '../components/SongCard.vue'
 import SongPlayer from '../components/SongPlayer.vue'
 import NaughtyList from '../components/NaughtyList.vue'
+import AwayNotification from '../components/AwayNotification.vue'
 import { useGigStore } from '../stores/gigs'
 import { useSongStore } from '../stores/songs'
 import { useAuthStore } from '../stores/auth'
@@ -342,6 +358,14 @@ const deleteError = ref('')
 const deletedSongNotice = ref(null)
 let deletedSongNoticeTimer = null
 let membershipChannel = null
+const songPlayerRef = ref(null)
+const showActivityNotif = ref(false)
+const activitySummary = ref({
+  new_songs: 0,
+  vote_updates: [],
+  reaction_updates: [],
+  comment_updates: [],
+})
 
 const isOwner = computed(() => gig.value?.owner_id === authStore.user?.id)
 const selectedSong = computed(() => songs.value.find((song) => song.id === selectedSongId.value) || null)
@@ -437,6 +461,13 @@ onMounted(async () => {
     await songStore.fetchSongs(gigId)
     songStore.subscribeToGig(gigId)
     subscribeMembershipChanges()
+
+    // Fetch activity summary while user was away
+    const summary = await songStore.getActivitySummary(gigId)
+    if (summary && (summary.new_songs > 0 || summary.vote_updates?.length > 0 || summary.reaction_updates?.length > 0 || summary.comment_updates?.length > 0)) {
+      activitySummary.value = summary
+      showActivityNotif.value = true
+    }
   } catch (e) {
     gigError.value = e.message
   } finally {
@@ -460,6 +491,12 @@ function subscribeMembershipChanges() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'gig_members', filter: `gig_id=eq.${gigId}` }, refreshGig)
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'gigs', filter: `id=eq.${gigId}` }, refreshGig)
     .subscribe()
+}
+
+function closeActivityNotif() {
+  showActivityNotif.value = false
+  // Update last_visited_at after showing the notification
+  songStore.updateLastVisited(gigId)
 }
 
 async function refreshGig() {
@@ -514,8 +551,15 @@ async function reopenVoting() {
   }
 }
 
-function selectSong(song) {
-  selectedSongId.value = song.id
+async function selectSong(song) {
+  selectedSongId.value = song?.id ?? null
+
+  if (!song) return
+
+  await nextTick()
+  if (songPlayerRef.value?.scrollIntoView) {
+    songPlayerRef.value.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 }
 
 function onSongDeleted(songMeta) {

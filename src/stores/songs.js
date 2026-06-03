@@ -570,11 +570,45 @@ export const useSongStore = defineStore('songs', () => {
     )
   }
 
+  async function getActivitySummary(gigId) {
+    const authStore = useAuthStore()
+    const userId = authStore.user?.id
+    if (!userId) return null
+
+    try {
+      const { data, error } = await supabase.rpc('get_gig_activity_summary', {
+        target_gig_id: gigId,
+        caller_id: userId,
+      })
+      if (error) throw error
+      return data
+    } catch (e) {
+      console.error('Failed to fetch activity summary:', e)
+      return null
+    }
+  }
+
+  async function updateLastVisited(gigId) {
+    const authStore = useAuthStore()
+    const userId = authStore.user?.id
+    if (!userId) return
+
+    try {
+      await supabase.rpc('update_last_visited', {
+        target_gig_id: gigId,
+        caller_id: userId,
+      })
+    } catch (e) {
+      console.error('Failed to update last visited:', e)
+    }
+  }
+
   return {
     songs, loading,
     fetchSongs, addSong, removeSong, castVote, toggleReaction, addComment, updateComment,
     subscribeToGig, unsubscribe,
     findSimilarSongInGig,
     updateSetlistFields, uploadVoiceMemo, pruneStaleMemos,
+    getActivitySummary, updateLastVisited,
   }
 })

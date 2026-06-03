@@ -132,6 +132,9 @@
               </div>
               <span class="text-[10px] text-gray-500 truncate">{{ adderProfile.display_name }}</span>
             </div>
+            <div v-if="formattedAddedAt" class="text-[10px] text-gray-500 mt-1">
+              Added {{ formattedAddedAt }}
+            </div>
             <div class="mt-1">
               <span v-if="song.source === 'spotify'" class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-green-900/60 text-green-300">
                 <svg viewBox="0 0 24 24" class="w-3 h-3" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -322,6 +325,23 @@ const deleteError = ref('')
 const pendingExternalUrl = ref(null)
 const isSongAdder = computed(() => props.song.added_by === authStore.user?.id)
 const adderProfile = computed(() => props.membersMap[props.song.added_by] ?? null)
+const formattedAddedAt = computed(() => {
+  if (!props.song.created_at) return ''
+
+  const addedAt = new Date(props.song.created_at)
+  if (Number.isNaN(addedAt.getTime())) return ''
+
+  const day = String(addedAt.getDate()).padStart(2, '0')
+  const month = String(addedAt.getMonth() + 1).padStart(2, '0')
+  const year = String(addedAt.getFullYear()).slice(-2)
+
+  const hours24 = addedAt.getHours()
+  const minutes = String(addedAt.getMinutes()).padStart(2, '0')
+  const meridiem = hours24 >= 12 ? 'PM' : 'AM'
+  const hours12 = hours24 % 12 || 12
+
+  return `${day}/${month}/${year} ${hours12}:${minutes}${meridiem}`
+})
 
 const reactionEmojis = ['❤️', '🔥', '👏', '😮', '🎸', '🤘']
 const urlPattern = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi
