@@ -44,8 +44,8 @@ Frontend layers:
     - songs.js: songs, votes, reactions, comments, setlist fields, realtime subscriptions, voice memo upload
 - Service layer: src/lib
     - supabase.js: client bootstrap via VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
-    - spotify.js: client-credentials token + track search mapping
-    - youtube.js: search fallback + embed URL helper
+    - spotify.js: calls spotify-search Edge Function
+    - youtube.js: calls youtube-search Edge Function
 
 ## Setup
 
@@ -68,35 +68,53 @@ This creates core tables, functions, triggers, RLS policies, and realtime public
 
 ### 3. Configure environment variables
 
-Create a .env file in project root:
+For local development, create `.env.development.local` in project root:
 
 ```env
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-VITE_SPOTIFY_CLIENT_ID=
-VITE_SPOTIFY_CLIENT_SECRET=
-VITE_YOUTUBE_API_KEY=
+VITE_SUPABASE_URL=https://your-dev-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-dev-anon-key
+```
+
+For production, create `.env.production.local`:
+
+```env
+VITE_SUPABASE_URL=https://your-prod-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-prod-anon-key
 ```
 
 Notes:
 
-- Supabase URL and anon key are required to use the app.
-- Spotify and YouTube keys are optional but required for external song search.
+- Only Supabase URL and anon key are needed in client env.
+- Spotify and YouTube API keys are stored server-side in Supabase Edge Function secrets (see step 4 below).
+- Never commit .env.local files; add them to .gitignore.
 
-### 4. Create required Supabase Storage buckets
+### 4. Deploy Supabase Edge Functions and set secrets
+
+1. Create two Edge Functions in your Supabase project:
+   - `spotify-search`: handles Spotify API token fetch and track search
+   - `youtube-search`: handles YouTube video search
+
+2. Set the following Edge Function secrets in Supabase project settings:
+   - `SPOTIFY_CLIENT_ID`: your Spotify app client ID
+   - `SPOTIFY_CLIENT_SECRET`: your Spotify app client secret
+   - `YOUTUBE_API_KEY`: your YouTube Data API v3 key
+
+These secrets are never exposed to the client; all API calls are made server-side.
+
+### 5. Create required Supabase Storage buckets
 
 - avatars (used by profile avatar upload)
 - voice-memos (used by song voice memo upload)
 
 Configure bucket/public access and storage policies based on your deployment security needs.
 
-### 5. Run locally
+### 6. Run locally
 
 ```bash
 npm run dev
 ```
 
-### 6. Build and preview
+### 7. Build and preview
 
 ```bash
 npm run build
