@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 
 export const useAuthStore = defineStore('auth', () => {
   const PROFILE_WRITE_TIMEOUT = 12000
+  const PROFILE_READ_TIMEOUT = 10000
   const AVATAR_UPLOAD_TIMEOUT = 12000
   const SIGNOUT_TIMEOUT = 8000
   const user = ref(null)
@@ -24,10 +25,18 @@ export const useAuthStore = defineStore('auth', () => {
       loading.value = false
     }
 
-    supabase.auth.onAuthStateChange(async (_event, session) => {
+    // Keep this callback synchronous. Awaiting Supabase queries directly inside
+    // onAuthStateChange can stall other client operations during refresh events.
+    supabase.auth.onAuthStateChange((event, session) => {
       user.value = session?.user ?? null
       if (user.value) {
-        await fetchProfile()
+        if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+          Promise.resolve()
+            .then(() => fetchProfile())
+            .catch((e) => {
+              console.error('Auth profile refresh error:', e)
+            })
+        }
       } else {
         profile.value = null
       }
@@ -37,14 +46,18 @@ export const useAuthStore = defineStore('auth', () => {
   async function fetchProfile() {
     if (!user.value) return
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.value.id)
-        .maybeSingle()
-      if (error) throw error
+      const { data: profileData, error: profileError } = await withTimeout(
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.value.id)
+          .maybeSingle(),
+        PROFILE_READ_TIMEOUT,
+        'Loading profile timed out. Please try again.'
+      )
+      if (profileError) throw profileError
 
-      let profileRow = data
+      let profileRow = profileData
       if (!profileRow) {
         const fallbackDisplayName = user.value.user_metadata?.display_name || null
 
