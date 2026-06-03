@@ -261,6 +261,16 @@ create table if not exists public.songs (
   created_at   timestamptz default now() not null
 );
 
+-- Prevent duplicate songs in the same gig.
+-- Uses provider IDs when available so near-identical titles do not collide.
+create unique index if not exists songs_unique_spotify_per_gig
+  on public.songs (gig_id, spotify_id)
+  where spotify_id is not null;
+
+create unique index if not exists songs_unique_youtube_per_gig
+  on public.songs (gig_id, youtube_id)
+  where youtube_id is not null;
+
 alter table public.songs enable row level security;
 
 create policy "Gig members can view songs"

@@ -4,6 +4,90 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from './auth'
 import { decodeSongTextFields } from '../lib/text'
 
+export const DUPLICATE_SONG_ERROR = 'This song has already been added to this gig.'
+const TITLE_NOISE_WORDS = new Set([
+  'official', 'music', 'video', 'lyrics', 'lyric', 'audio', 'live', 'visualizer',
+  'remaster', 'remastered', 'version', 'edit', 'hd', '4k', 'mv', 'performance',
+  'mono', 'stereo', 'feat', 'ft', 'explicit', 'clean', 'karaoke',
+])
+
+export function isDuplicateSongError(errorLike) {
+  const message = (errorLike?.message || '').toLowerCase()
+  const details = (errorLike?.details || '').toLowerCase()
+  const hint = (errorLike?.hint || '').toLowerCase()
+  const code = errorLike?.code || ''
+
+  if (code === '23505') return true
+
+  return [message, details, hint].some((text) => (
+    text.includes('songs_unique_spotify_per_gig')
+    || text.includes('songs_unique_youtube_per_gig')
+    || text.includes('duplicate key value violates unique constraint')
+    || text.includes(DUPLICATE_SONG_ERROR.toLowerCase())
+  ))
+}
+
+function normalizeText(value) {
+  if (typeof value !== 'string') return ''
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .trim()
+}
+
+function normalizeTitleForTokens(title) {
+  return normalizeText(title)
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/[-_:|/]+/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function tokenizeTitle(title) {
+  const normalized = normalizeTitleForTokens(title)
+  if (!normalized) return []
+
+  return normalized
+    .split(' ')
+    .filter((token) => token.length > 1 && !TITLE_NOISE_WORDS.has(token) && !/^\d{4}$/.test(token))
+}
+
+function titleSimilarityScore(titleA, titleB) {
+  const tokensA = tokenizeTitle(titleA)
+  const tokensB = tokenizeTitle(titleB)
+  if (!tokensA.length || !tokensB.length) return 0
+
+  const setA = new Set(tokensA)
+  const setB = new Set(tokensB)
+  const intersection = [...setA].filter((token) => setB.has(token)).length
+  const union = new Set([...setA, ...setB]).size
+  const minLen = Math.min(setA.size, setB.size)
+
+  if (!union || !minLen) return 0
+
+  const jaccard = intersection / union
+  const containment = intersection / minLen
+
+  return Math.max(jaccard, containment)
+}
+
+function artistSimilarityScore(artistA, artistB) {
+  const a = normalizeText(artistA)
+  const b = normalizeText(artistB)
+  if (!a || !b) return 0
+  if (a === b) return 1
+
+  const tokensA = new Set(a.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean))
+  const tokensB = new Set(b.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean))
+  const intersection = [...tokensA].filter((token) => tokensB.has(token)).length
+  const union = new Set([...tokensA, ...tokensB]).size
+  return union ? intersection / union : 0
+}
+
 export const useSongStore = defineStore('songs', () => {
   const songs = ref([])
   const loading = ref(false)
@@ -34,6 +118,41 @@ export const useSongStore = defineStore('songs', () => {
   async function addSong(gigId, songData) {
     const authStore = useAuthStore()
     const normalizedSongData = decodeSongTextFields(songData)
+
+    const duplicateCheckQuery = supabase
+      .from('songs')
+      .select('id')
+      .eq('gig_id', gigId)
+      .limit(1)
+
+    if (songData.spotifyId) {
+      duplicateCheckQuery.eq('spotify_id', songData.spotifyId)
+    } else if (songData.youtubeId) {
+      duplicateCheckQuery.eq('youtube_id', songData.youtubeId)
+    } else {
+      duplicateCheckQuery
+        .eq('source', songData.source)
+        .eq('title', normalizedSongData.title || '')
+        .eq('artist', normalizedSongData.artist || null)
+    }
+
+    const { data: duplicateSong, error: duplicateSongError } = await withTimeout(
+      duplicateCheckQuery.maybeSingle(),
+      SONG_WRITE_TIMEOUT_MS,
+      'Checking for duplicate song timed out. Please try again.'
+    )
+
+    if (duplicateSongError) {
+      if (isDuplicateSongError(duplicateSongError)) {
+        throw new Error(DUPLICATE_SONG_ERROR)
+      }
+      throw new Error(duplicateSongError.message || 'Failed to validate song duplication.')
+    }
+
+    if (duplicateSong?.id) {
+      throw new Error(DUPLICATE_SONG_ERROR)
+    }
+
     const payload = {
       gig_id: gigId,
       added_by: authStore.user.id,
@@ -110,13 +229,51 @@ export const useSongStore = defineStore('songs', () => {
       data = result.data
       error = result.error
     } catch (e) {
+      if (isDuplicateSongError(e)) {
+        throw new Error(DUPLICATE_SONG_ERROR)
+      }
+
       const recovered = await recoverAddedSong()
       if (recovered) return recovered
       throw e
     }
 
+    if (isDuplicateSongError(error)) {
+      throw new Error(DUPLICATE_SONG_ERROR)
+    }
+
     if (error) throw error
+
     return appendOrUpdateSong(data)
+  }
+
+  function findSimilarSongInGig(gigId, songData) {
+    const incoming = decodeSongTextFields(songData)
+    const incomingTitle = incoming?.title || ''
+    if (!incomingTitle.trim()) return null
+
+    let bestMatch = null
+    let bestScore = 0
+
+    for (const existingSong of songs.value) {
+      if (existingSong.gig_id !== gigId) continue
+      if (existingSong.spotify_id && songData.spotifyId && existingSong.spotify_id === songData.spotifyId) continue
+      if (existingSong.youtube_id && songData.youtubeId && existingSong.youtube_id === songData.youtubeId) continue
+
+      const titleScore = titleSimilarityScore(incomingTitle, existingSong.title || '')
+      const artistScore = artistSimilarityScore(incoming.artist || '', existingSong.artist || '')
+
+      const isLikelySimilar = titleScore >= 0.9 || (titleScore >= 0.75 && artistScore >= 0.3)
+      if (!isLikelySimilar) continue
+
+      const combined = titleScore + artistScore * 0.15
+      if (combined > bestScore) {
+        bestScore = combined
+        bestMatch = existingSong
+      }
+    }
+
+    return bestMatch
   }
 
   async function removeSong(songId) {
@@ -413,6 +570,7 @@ export const useSongStore = defineStore('songs', () => {
     songs, loading,
     fetchSongs, addSong, removeSong, castVote, toggleReaction, addComment, updateComment,
     subscribeToGig, unsubscribe,
+    findSimilarSongInGig,
     updateSetlistFields, uploadVoiceMemo, pruneStaleMemos,
   }
 })

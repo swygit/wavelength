@@ -79,6 +79,48 @@
       </div>
     </div>
   </div>
+
+  <teleport to="body">
+    <div
+      v-if="showDuplicateSongNotice"
+      class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      @click.self="showDuplicateSongNotice = false"
+    >
+      <div class="w-full max-w-lg card border border-brand-500/40">
+        <p class="text-xs uppercase tracking-wide text-brand-300">Song Already Added</p>
+        <h2 class="text-lg font-bold mt-1">This song is already in the playlist.</h2>
+        <p class="text-sm text-gray-300 mt-3 leading-relaxed">
+          Pick another song!
+        </p>
+        <div class="mt-5 flex flex-col sm:flex-row sm:justify-end gap-2">
+          <button class="btn-primary text-sm w-full sm:w-auto" @click="showDuplicateSongNotice = false">Got it</button>
+        </div>
+      </div>
+    </div>
+  </teleport>
+
+  <teleport to="body">
+    <div
+      v-if="showSimilarSongNotice"
+      class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      @click.self="cancelSimilarSong"
+    >
+      <div class="w-full max-w-lg card border border-amber-500/40">
+        <p class="text-xs uppercase tracking-wide text-amber-300">Possible Duplicate Song</p>
+        <h2 class="text-lg font-bold mt-1">This looks similar to a song already in the setlist!</h2>
+        <p class="text-sm text-gray-300 mt-3 leading-relaxed">
+          Existing song:
+          <span class="font-semibold text-white">{{ similarSongMatch?.title }}</span>
+          <span v-if="similarSongMatch?.artist" class="text-gray-200"> by {{ similarSongMatch.artist }}</span>
+        </p>
+        <p class="text-sm text-gray-300 mt-2">Add this song anyway?</p>
+        <div class="mt-5 flex flex-col sm:flex-row sm:justify-end gap-2">
+          <button class="btn-secondary text-sm w-full sm:w-auto" @click="cancelSimilarSong">Cancel</button>
+          <button class="btn-primary text-sm w-full sm:w-auto" @click="confirmAddSimilarSong">Add anyway</button>
+        </div>
+      </div>
+    </div>
+  </teleport>
 </template>
 
 <script setup>
@@ -86,7 +128,7 @@ import { ref } from 'vue'
 import { searchSpotifyTracks } from '../lib/spotify'
 import { searchYouTubeVideos } from '../lib/youtube'
 import { decodeSongTextFields } from '../lib/text'
-import { useSongStore } from '../stores/songs'
+import { isDuplicateSongError, useSongStore } from '../stores/songs'
 
 const props = defineProps({ gigId: { type: String, required: true } })
 
@@ -103,6 +145,10 @@ const results = ref([])
 const searching = ref(false)
 const searchError = ref(null)
 const adding = ref(null)
+const showDuplicateSongNotice = ref(false)
+const showSimilarSongNotice = ref(false)
+const pendingSimilarSong = ref(null)
+const similarSongMatch = ref(null)
 
 async function handleSearch() {
   if (!query.value.trim()) return
@@ -123,15 +169,50 @@ async function handleSearch() {
 }
 
 async function addSong(song) {
+  await addSongInternal(song, false)
+}
+
+async function addSongInternal(song, skipSimilarCheck) {
   const key = song.spotifyId || song.youtubeId
   adding.value = key
+  searchError.value = null
   try {
+    if (!skipSimilarCheck) {
+      const similar = songStore.findSimilarSongInGig(props.gigId, song)
+      if (similar) {
+        pendingSimilarSong.value = song
+        similarSongMatch.value = similar
+        showSimilarSongNotice.value = true
+        return
+      }
+    }
+
     await songStore.addSong(props.gigId, song)
     results.value = results.value.filter((r) => (r.spotifyId || r.youtubeId) !== key)
   } catch (e) {
+    if (isDuplicateSongError(e)) {
+      showDuplicateSongNotice.value = true
+      return
+    }
+
     searchError.value = e.message
   } finally {
     adding.value = null
   }
+}
+
+function cancelSimilarSong() {
+  showSimilarSongNotice.value = false
+  pendingSimilarSong.value = null
+  similarSongMatch.value = null
+}
+
+async function confirmAddSimilarSong() {
+  const song = pendingSimilarSong.value
+  showSimilarSongNotice.value = false
+  pendingSimilarSong.value = null
+  similarSongMatch.value = null
+  if (!song) return
+  await addSongInternal(song, true)
 }
 </script>
