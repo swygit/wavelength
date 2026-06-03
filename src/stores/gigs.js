@@ -17,9 +17,9 @@ export const useGigStore = defineStore('gigs', () => {
       const { data, error } = await withTimeout(
         supabase
           .from('gig_members')
-          .select('gig_id, role, gigs(id, name, description, invite_code, created_at, owner_id, status)')
+          .select('gig_id, role, last_visited_at, gigs(id, name, description, invite_code, created_at, owner_id, status)')
           .eq('user_id', authStore.user.id)
-          .order('created_at', { foreignTable: 'gigs', ascending: false }),
+          .order('last_visited_at', { ascending: false, nullsFirst: false }),
         READ_TIMEOUT,
         'Loading gigs timed out. Please try again.'
       )

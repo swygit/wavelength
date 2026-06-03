@@ -43,20 +43,30 @@
     <div class="mt-3 text-xs text-gray-400 flex items-center justify-between gap-2">
       <span>If embed fails, open directly:</span>
       <a
-        v-if="song.external_url"
-        :href="song.external_url"
+        v-if="normalizedExternalUrl"
+        :href="normalizedExternalUrl"
         target="_blank"
         rel="noopener noreferrer"
         class="text-gray-200 hover:text-white underline"
+        @click.prevent="openExternalLink(normalizedExternalUrl)"
       >
         Open source
       </a>
     </div>
   </div>
+
+  <ExternalLinkNotice
+    :model-value="Boolean(pendingExternalUrl)"
+    :url="pendingExternalUrl || ''"
+    @cancel="pendingExternalUrl = null"
+    @confirm="confirmExternalLink"
+  />
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import ExternalLinkNotice from './ExternalLinkNotice.vue'
+import { normalizeExternalUrl } from '../lib/text'
 
 const props = defineProps({
   song: { type: Object, required: true },
@@ -66,6 +76,8 @@ defineEmits(['clear'])
 
 const normalizedSpotifyId = computed(() => normalizeSpotifyTrackId(props.song.spotify_id))
 const normalizedYouTubeId = computed(() => normalizeYouTubeId(props.song.youtube_id || props.song.external_url))
+const normalizedExternalUrl = computed(() => normalizeExternalUrl(props.song.external_url))
+const pendingExternalUrl = ref(null)
 
 const showPreviewAudio = computed(() => Boolean(props.song.preview_url))
 const isSpotifyEmbed = computed(() => !showPreviewAudio.value && Boolean(normalizedSpotifyId.value))
@@ -80,6 +92,17 @@ const youtubeEmbedUrl = computed(() => {
   if (!normalizedYouTubeId.value) return ''
   return `https://www.youtube.com/embed/${normalizedYouTubeId.value}?autoplay=1&playsinline=1&rel=0&modestbranding=1`
 })
+
+function openExternalLink(url) {
+  pendingExternalUrl.value = normalizeExternalUrl(url)
+}
+
+function confirmExternalLink() {
+  if (pendingExternalUrl.value && typeof window !== 'undefined') {
+    window.open(pendingExternalUrl.value, '_blank', 'noopener,noreferrer')
+  }
+  pendingExternalUrl.value = null
+}
 
 function normalizeSpotifyTrackId(value) {
   if (!value || typeof value !== 'string') return null

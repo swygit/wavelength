@@ -108,7 +108,15 @@
       <div class="flex-1 min-w-0 sm:pr-40">
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
-            <div class="font-semibold truncate">{{ song.title }}</div>
+            <div class="flex items-center gap-2 min-w-0">
+              <span
+                v-if="addedOrder"
+                class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-700 text-[11px] font-semibold text-gray-200 flex-shrink-0"
+              >
+                {{ addedOrder }}
+              </span>
+              <div class="font-semibold truncate">{{ song.title }}</div>
+            </div>
             <div class="text-sm text-gray-400 truncate">{{ song.artist }}</div>
             <div class="text-xs text-gray-500 truncate">{{ song.album }}</div>
             <!-- Added by -->
@@ -123,6 +131,9 @@
                 {{ (adderProfile.display_name || 'A')[0].toUpperCase() }}
               </div>
               <span class="text-[10px] text-gray-500 truncate">{{ adderProfile.display_name }}</span>
+            </div>
+            <div v-if="formattedAddedAt" class="text-[10px] text-gray-500 mt-1">
+              Added {{ formattedAddedAt }}
             </div>
             <div class="mt-1">
               <span v-if="song.source === 'spotify'" class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-green-900/60 text-green-300">
@@ -243,7 +254,21 @@
                 <button type="button" class="btn-secondary text-xs px-2 py-1 w-full sm:w-auto" @click="cancelEditComment">Cancel</button>
               </form>
             </template>
-            <p v-else class="text-gray-300 mt-0.5">{{ comment.body }}</p>
+            <div v-else class="text-gray-300 mt-0.5 break-words">
+              <template v-for="(segment, index) in getCommentSegments(comment.body)" :key="`${comment.id}-${index}`">
+                <a
+                  v-if="segment.type === 'link'"
+                  :href="segment.href"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-cyan-300 underline break-all hover:text-cyan-200"
+                  @click.prevent="openExternalLink(segment.href)"
+                >
+                  {{ segment.text }}
+                </a>
+                <span v-else class="whitespace-pre-wrap">{{ segment.text }}</span>
+              </template>
+            </div>
           </div>
         </div>
         <div v-if="commentError" class="text-[10px] text-red-400">{{ commentError }}</div>
@@ -260,10 +285,19 @@
       </form>
     </div>
   </div>
+
+  <ExternalLinkNotice
+    :model-value="Boolean(pendingExternalUrl)"
+    :url="pendingExternalUrl || ''"
+    @cancel="pendingExternalUrl = null"
+    @confirm="confirmExternalLink"
+  />
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
+import ExternalLinkNotice from './ExternalLinkNotice.vue'
+import { normalizeExternalUrl } from '../lib/text'
 import { useSongStore } from '../stores/songs'
 import { useAuthStore } from '../stores/auth'
 
@@ -272,9 +306,10 @@ const props = defineProps({
   votingOpen: { type: Boolean, default: true },
   selected: { type: Boolean, default: false },
   membersMap: { type: Object, default: () => ({}) },
+  addedOrder: { type: Number, default: null },
 })
 
-const emit = defineEmits(['select'])
+const emit = defineEmits(['select', 'deleted'])
 
 const songStore = useSongStore()
 const authStore = useAuthStore()
@@ -287,10 +322,29 @@ const commentError = ref('')
 const showDeleteModal = ref(false)
 const isDeleting = ref(false)
 const deleteError = ref('')
+const pendingExternalUrl = ref(null)
 const isSongAdder = computed(() => props.song.added_by === authStore.user?.id)
 const adderProfile = computed(() => props.membersMap[props.song.added_by] ?? null)
+const formattedAddedAt = computed(() => {
+  if (!props.song.created_at) return ''
+
+  const addedAt = new Date(props.song.created_at)
+  if (Number.isNaN(addedAt.getTime())) return ''
+
+  const day = String(addedAt.getDate()).padStart(2, '0')
+  const month = String(addedAt.getMonth() + 1).padStart(2, '0')
+  const year = String(addedAt.getFullYear()).slice(-2)
+
+  const hours24 = addedAt.getHours()
+  const minutes = String(addedAt.getMinutes()).padStart(2, '0')
+  const meridiem = hours24 >= 12 ? 'PM' : 'AM'
+  const hours12 = hours24 % 12 || 12
+
+  return `${day}/${month}/${year} ${hours12}:${minutes}${meridiem}`
+})
 
 const reactionEmojis = ['❤️', '🔥', '👏', '😮', '🎸', '🤘']
+const urlPattern = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi
 
 function hasMyReaction(emoji) {
   return props.song.reactions?.some((r) => r.user_id === authStore.user?.id && r.emoji === emoji)
@@ -304,6 +358,17 @@ function selectForPlayback() {
   emit('select', props.song)
 }
 
+function openExternalLink(url) {
+  pendingExternalUrl.value = normalizeExternalUrl(url)
+}
+
+function confirmExternalLink() {
+  if (pendingExternalUrl.value && typeof window !== 'undefined') {
+    window.open(pendingExternalUrl.value, '_blank', 'noopener,noreferrer')
+  }
+  pendingExternalUrl.value = null
+}
+
 function confirmDeleteSong() {
   deleteError.value = ''
   showDeleteModal.value = true
@@ -312,7 +377,14 @@ function confirmDeleteSong() {
 async function deleteSong() {
   isDeleting.value = true
   try {
-    await songStore.removeSong(props.song.id)
+    await songStore.removeSong(props.song.id, {
+      onSuccess: (removedSong) => {
+        emit('deleted', {
+          title: removedSong?.title || props.song.title,
+          artist: removedSong?.artist || props.song.artist,
+        })
+      },
+    })
     showDeleteModal.value = false
   } catch (e) {
     deleteError.value = e.message || 'Failed to delete song.'
@@ -367,5 +439,54 @@ async function saveEditedComment(comment) {
 function isEditedComment(comment) {
   if (!comment?.updated_at || !comment?.created_at) return false
   return new Date(comment.updated_at).getTime() > new Date(comment.created_at).getTime()
+}
+
+function getCommentSegments(body) {
+  if (typeof body !== 'string' || !body) return [{ type: 'text', text: body ?? '' }]
+
+  const segments = []
+  let lastIndex = 0
+
+  for (const match of body.matchAll(urlPattern)) {
+    const rawMatch = match[0]
+    const start = match.index ?? 0
+    const end = start + rawMatch.length
+    const { cleanedUrl, trailingText } = stripTrailingPunctuation(rawMatch)
+    const normalizedUrl = normalizeExternalUrl(cleanedUrl)
+
+    if (start > lastIndex) {
+      segments.push({ type: 'text', text: body.slice(lastIndex, start) })
+    }
+
+    if (normalizedUrl) {
+      segments.push({ type: 'link', text: cleanedUrl, href: normalizedUrl })
+    } else {
+      segments.push({ type: 'text', text: rawMatch })
+    }
+
+    if (trailingText) {
+      segments.push({ type: 'text', text: trailingText })
+    }
+
+    lastIndex = end
+  }
+
+  if (lastIndex < body.length) {
+    segments.push({ type: 'text', text: body.slice(lastIndex) })
+  }
+
+  return segments.length ? segments : [{ type: 'text', text: body }]
+}
+
+function stripTrailingPunctuation(value) {
+  let cleanedUrl = value
+  let trailingText = ''
+
+  while (/[),.!?]$/.test(cleanedUrl)) {
+    trailingText = cleanedUrl.slice(-1) + trailingText
+    cleanedUrl = cleanedUrl.slice(0, -1)
+  }
+
+  return { cleanedUrl, trailingText }
 }
 </script>

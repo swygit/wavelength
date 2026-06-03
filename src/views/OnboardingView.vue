@@ -83,10 +83,8 @@
 
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
-const router = useRouter()
 const authStore = useAuthStore()
 
 const displayName = ref('')
@@ -113,22 +111,20 @@ async function handleSave() {
   error.value = null
   try {
     const finalDisplayName = displayName.value.trim()
-    await authStore.updateProfile({ display_name: finalDisplayName })
+    const updates = { display_name: finalDisplayName }
+
+    // Await avatar upload before navigation so first-time onboarding saves reliably.
+    if (avatarFile.value) {
+      updates.avatar_url = await authStore.uploadAvatar(avatarFile.value)
+    }
+
+    await authStore.updateProfile(updates)
 
     // Keep local state aligned so route guards can pass immediately.
     authStore.profile = {
       ...(authStore.profile || {}),
       display_name: finalDisplayName,
-    }
-
-    // Avatar upload is optional; do it in the background so onboarding feels instant.
-    if (avatarFile.value) {
-      authStore
-        .uploadAvatar(avatarFile.value)
-        .then((avatarUrl) => authStore.updateProfile({ avatar_url: avatarUrl }))
-        .catch((e) => {
-          console.warn('Background avatar upload failed:', e)
-        })
+      ...(updates.avatar_url ? { avatar_url: updates.avatar_url } : {}),
     }
 
     // Refresh profile in the background without blocking navigation.
@@ -142,7 +138,7 @@ async function handleSave() {
       // Ignore storage issues; navigation should still continue.
     }
 
-    window.location.href = '/dashboard'
+    window.location.assign('/dashboard')
   } catch (e) {
     error.value = e.message
     saving.value = false
