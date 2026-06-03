@@ -878,6 +878,7 @@ begin
     inner join public.votes v on v.song_id = s.id
       and v.voted_at > last_visit
       and v.value != 0
+      and v.user_id != caller_id
     where s.gig_id = target_gig_id
       and s.added_by = caller_id
       and s.is_cancelled = false
@@ -892,6 +893,7 @@ begin
     from public.songs s
     inner join public.reactions r on r.song_id = s.id
       and r.created_at > last_visit
+      and r.user_id != caller_id
     where s.gig_id = target_gig_id
       and s.added_by = caller_id
       and s.is_cancelled = false
@@ -906,6 +908,7 @@ begin
     from public.songs s
     inner join public.comments c on c.song_id = s.id
       and c.created_at > last_visit
+      and c.user_id != caller_id
     where s.gig_id = target_gig_id
       and s.added_by = caller_id
       and s.is_cancelled = false
