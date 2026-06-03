@@ -3,6 +3,7 @@
  * Uses a server-side Supabase Edge Function to keep API keys out of the client.
  */
 
+import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 
 /**
@@ -17,6 +18,18 @@ export async function searchYouTubeVideos(query, maxResults = 5) {
   })
 
   if (error) {
+    if (error instanceof FunctionsHttpError) {
+      try {
+        const payload = await error.context.json()
+        const message = payload?.error
+        if (message) throw new Error(message)
+      } catch (parseError) {
+        if (parseError instanceof Error && parseError.message) {
+          throw parseError
+        }
+      }
+    }
+
     throw new Error(error.message || 'YouTube search failed')
   }
 
