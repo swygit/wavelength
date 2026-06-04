@@ -48,6 +48,11 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/folders/:id',
+    component: () => import('./views/FolderView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/:pathMatch(.*)*',
     redirect: '/',
   },
