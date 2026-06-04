@@ -8,8 +8,8 @@
       <!-- Gig header -->
       <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
         <div>
-          <RouterLink to="/dashboard" class="text-sm text-gray-400 hover:text-white inline-flex items-center gap-1 mb-2">
-            ← Dashboard
+          <RouterLink :to="backLink" class="text-sm text-gray-400 hover:text-white inline-flex items-center gap-1 mb-2">
+            {{ backLabel }}
           </RouterLink>
           <div class="flex items-center gap-2 mb-2">
             <h1 class="text-2xl font-bold">{{ gig.name }}</h1>
@@ -184,11 +184,11 @@
             </div>
           </div>
 
+          <NaughtyList :gig="gig" :songs="songs" />
+
           <div ref="songPlayerRef">
             <SongPlayer v-if="selectedSong" :song="selectedSong" @clear="selectedSongId = null" />
           </div>
-
-          <NaughtyList :gig="gig" :songs="songs" />
         </div>
       </div>
     </div>
@@ -324,6 +324,7 @@ import AwayNotification from '../components/AwayNotification.vue'
 import { useGigStore } from '../stores/gigs'
 import { useSongStore } from '../stores/songs'
 import { useAuthStore } from '../stores/auth'
+import { useFolderStore } from '../stores/folders'
 import { supabase } from '../lib/supabase'
 import confetti from 'canvas-confetti'
 
@@ -334,9 +335,14 @@ const gigId = route.params.id
 const gigStore = useGigStore()
 const songStore = useSongStore()
 const authStore = useAuthStore()
+const folderStore = useFolderStore()
 
 const { currentGig: gig } = storeToRefs(gigStore)
 const { songs } = storeToRefs(songStore)
+
+const gigFolderId = ref(null)
+const backLink = computed(() => gigFolderId.value ? `/folders/${gigFolderId.value}` : '/dashboard')
+const backLabel = computed(() => gigFolderId.value ? '← Back to folder' : '← Home')
 
 const gigError = ref(null)
 const pageLoading = ref(true)
@@ -461,6 +467,10 @@ onMounted(async () => {
     await songStore.fetchSongs(gigId)
     songStore.subscribeToGig(gigId)
     subscribeMembershipChanges()
+
+    // Determine if this gig is inside a folder
+    const folderMap = await folderStore.getGigFolderMap()
+    gigFolderId.value = folderMap[gigId] || null
 
     // Fetch activity summary while user was away
     const summary = await songStore.getActivitySummary(gigId)
