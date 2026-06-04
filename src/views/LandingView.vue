@@ -25,7 +25,7 @@
         </h1>
 
         <p class="mt-7 text-base md:text-lg text-slate-300 max-w-3xl leading-relaxed">
-          Wavelength is collaborative setlist planning for bands. Curate songs, vote in real time, and lock a final list everyone can trust before the show.
+          Wavelength is collaborative setlist planning for bands. Curate and vote for songs together with your friends.
         </p>
 
         <div class="mt-8 flex flex-wrap items-center gap-3">
@@ -34,6 +34,20 @@
         </div>
 
         <div id="feature-bubbles" class="mt-9 grid md:grid-cols-3 gap-3 scroll-mt-28 md:scroll-mt-32">
+          <div class="rounded-2xl border border-emerald-300/30 bg-gradient-to-b from-emerald-400/10 to-white/5 p-4 transition-transform duration-300 hover:-translate-y-1 hover:bg-white/10">
+            <div class="flex items-start gap-3">
+              <div class="w-9 h-9 rounded-xl bg-emerald-400/20 border border-emerald-300/40 flex items-center justify-center text-base">
+                <svg viewBox="0 0 24 24" class="w-4.5 h-4.5 text-emerald-100" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <circle cx="11" cy="11" r="6" />
+                  <path d="M20 20L15.5 15.5" stroke-linecap="round" />
+                </svg>
+              </div>
+              <div>
+                <p class="text-xs text-emerald-100/85 tracking-wide uppercase">Intuitive user experience</p>
+                <p class="text-sm mt-1">Create or join a gig, then add and listen to songs from Spotify and Youtube directly.</p>
+              </div>
+            </div>
+          </div>
           <div class="rounded-2xl border border-cyan-300/30 bg-gradient-to-b from-cyan-400/10 to-white/5 p-4 transition-transform duration-300 hover:-translate-y-1 hover:bg-white/10">
             <div class="flex items-start gap-3">
               <div class="w-9 h-9 rounded-xl bg-cyan-400/20 border border-cyan-300/40 flex items-center justify-center">
@@ -50,22 +64,8 @@
                 </svg>
               </div>
               <div>
-                <p class="text-xs text-cyan-100/85 tracking-wide uppercase">Live Collaboration</p>
-                <p class="text-sm mt-1">Votes and reactions sync instantly across every bandmate.</p>
-              </div>
-            </div>
-          </div>
-          <div class="rounded-2xl border border-emerald-300/30 bg-gradient-to-b from-emerald-400/10 to-white/5 p-4 transition-transform duration-300 hover:-translate-y-1 hover:bg-white/10">
-            <div class="flex items-start gap-3">
-              <div class="w-9 h-9 rounded-xl bg-emerald-400/20 border border-emerald-300/40 flex items-center justify-center text-base">
-                <svg viewBox="0 0 24 24" class="w-4.5 h-4.5 text-emerald-100" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <circle cx="11" cy="11" r="6" />
-                  <path d="M20 20L15.5 15.5" stroke-linecap="round" />
-                </svg>
-              </div>
-              <div>
-                <p class="text-xs text-emerald-100/85 tracking-wide uppercase">Search and Preview</p>
-                <p class="text-sm mt-1">Pull songs from Spotify and YouTube with fast fallback playback.</p>
+                <p class="text-xs text-cyan-100/85 tracking-wide uppercase">Collaborate with your bandmates</p>
+                <p class="text-sm mt-1">Vote for, react and add comments to your favourite tunes — all in a shared workspace.</p>
               </div>
             </div>
           </div>
@@ -81,8 +81,8 @@
                 </svg>
               </div>
               <div>
-                <p class="text-xs text-amber-100/85 tracking-wide uppercase">Show-Ready Summary</p>
-                <p class="text-sm mt-1">Lock rankings, tune set order, add keys, notes, and voice memos.</p>
+                <p class="text-xs text-amber-100/85 tracking-wide uppercase">Robust Setlist Customization</p>
+                <p class="text-sm mt-1">Finalize your setlist order, detail your arrangements for each instrument, and export everything for the show.</p>
               </div>
             </div>
           </div>
@@ -102,7 +102,7 @@
               <div class="flex flex-col items-center text-center gap-3">
                 <div class="w-10 h-10 rounded-full bg-cyan-400/20 border border-cyan-300/40 flex items-center justify-center text-lg">🎸</div>
                 <div>
-                  <p class="text-sm font-semibold">1. Create or Join a Gig</p>
+                  <p class="text-sm font-semibold">1. Create or join a gig</p>
                   <p class="text-xs text-slate-300 mt-1">Start a new workspace or join one with an invite code.</p>
                 </div>
               </div>
@@ -114,7 +114,7 @@
               <div class="flex flex-col items-center text-center gap-3">
                 <div class="w-10 h-10 rounded-full bg-emerald-400/20 border border-emerald-300/40 flex items-center justify-center text-lg">👥</div>
                 <div>
-                  <p class="text-sm font-semibold">2. Invite Your Bandmates</p>
+                  <p class="text-sm font-semibold">2. Invite your friends</p>
                   <p class="text-xs text-slate-300 mt-1">Share the gig code so everyone can contribute in the same place.</p>
                 </div>
               </div>
@@ -137,8 +137,8 @@
                   </span>
                 </div>
                 <div>
-                  <p class="text-sm font-semibold">3. Add Songs</p>
-                  <p class="text-xs text-slate-300 mt-1">Search Spotify/YouTube and build your candidate setlist together.</p>
+                  <p class="text-sm font-semibold">3. Add the tunes you like</p>
+                  <p class="text-xs text-slate-300 mt-1">Search Spotify/YouTube and build your ideal setlist together.</p>
                 </div>
               </div>
             </div>
@@ -153,7 +153,7 @@
                   <span>👍</span>
                 </div>
                 <div>
-                  <p class="text-sm font-semibold">4. Choose a song you wanna play</p>
+                  <p class="text-sm font-semibold">4. Vote for songs you want to play</p>
                   <p class="text-xs text-slate-300 mt-1">Vote, react, and leave comments so the band can quickly see which songs everyone wants in the set.</p>
                 </div>
               </div>
@@ -165,8 +165,8 @@
               <div class="flex flex-col items-center text-center gap-3">
                 <div class="w-10 h-10 rounded-full bg-pink-400/20 border border-pink-300/40 flex items-center justify-center text-lg">📊</div>
                 <div>
-                  <p class="text-sm font-semibold">5. Finalize the setlist</p>
-                  <p class="text-xs text-slate-300 mt-1">Close voting, lock the shortlist together, reorder the set, and add keys, notes, or voice memos before show night.</p>
+                  <p class="text-sm font-semibold">5. Finalize the setlist and create the arrangements</p>
+                  <p class="text-xs text-slate-300 mt-1">Close voting, reorder the setlist, add song keys, BPM, notes, voice memos and chord charts for each instrument.</p>
                 </div>
               </div>
             </div>
@@ -176,9 +176,9 @@
 
       <section class="max-w-6xl mx-auto px-5 pt-8 pb-16 md:pt-10 md:pb-20">
         <div class="rounded-3xl border border-cyan-300/20 bg-gradient-to-r from-cyan-500/15 to-blue-500/15 p-8 md:p-12 text-center">
-          <h2 class="text-3xl md:text-4xl font-semibold tracking-tight">Ready to shape your next set?</h2>
+          <h2 class="text-3xl md:text-4xl font-semibold tracking-tight">Ready to rock out at your next gig?</h2>
           <p class="text-slate-200/90 mt-3 max-w-2xl mx-auto">
-            Bring your band into one workspace, vote with clarity, and walk into your next show with a confident final setlist.
+            May the best songs prevail.
           </p>
           <div class="mt-7 flex items-center justify-center gap-3 flex-wrap">
             <RouterLink to="/auth" class="btn-primary px-6 py-3 text-sm">Start with Wavelength</RouterLink>
