@@ -8,7 +8,7 @@
       <RouterLink :to="`/gigs/${gigId}`" class="btn-secondary text-sm mt-4">Back to gig</RouterLink>
     </div>
 
-    <div v-else-if="gig" class="max-w-3xl mx-auto">
+    <div v-else-if="gig" class="max-w-5xl mx-auto">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div>
           <RouterLink :to="`/gigs/${gigId}`" class="text-sm text-gray-400 hover:text-white inline-flex items-center gap-1 mb-2">
@@ -75,29 +75,24 @@
         </div>
       </div>
 
+      <!-- Two-column layout -->
+      <div class="grid lg:grid-cols-3 gap-6">
+        <!-- Song list (left / main) -->
+        <div class="lg:col-span-2">
       <!-- Ranked / reorderable songs -->
       <div v-if="!orderedSongs.length" class="card text-center py-10 text-gray-400">
         No songs were added to this gig.
       </div>
 
-      <draggable
-        v-else
-        v-model="orderedSongs"
-        item-key="id"
-        handle=".drag-handle"
-        animation="150"
-        ghost-class="opacity-40"
-        @end="onReorder"
-        class="space-y-3"
-      >
-        <template #item="{ element: song, index: idx }">
-          <div class="card relative" :class="song.is_cancelled ? 'opacity-60 border-gray-600' : ''" :key="song.id">
+      <div v-else class="space-y-3">
+        <template v-for="(song, idx) in orderedSongs" :key="song.id">
+          <div v-show="isSongVisible(song)" class="card relative cursor-pointer hover:border-brand-500 transition-colors" :class="song.is_cancelled ? 'opacity-60 border-gray-600' : ''" @click="goToArrangement(song.id)">
             <!-- Cross-out toggle: top-right corner -->
             <button
               class="absolute top-3.5 right-4 w-5 h-5 rounded-full flex items-center justify-center transition-all"
               :class="song.is_cancelled ? 'bg-green-500/20 text-green-300 hover:bg-green-500/35' : 'bg-red-500/25 text-red-300 hover:bg-red-500/45'"
               :title="song.is_cancelled ? 'Restore song' : 'Cross out'"
-              @click="toggleCancelled(song)"
+              @click.stop="toggleCancelled(song)"
             >
               <svg v-if="song.is_cancelled" viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
                 <path d="M3 12h18M9 6l-6 6 6 6" />
@@ -107,14 +102,6 @@
               </svg>
             </button>
             <div class="flex items-start gap-3">
-              <!-- Drag handle -->
-              <div class="drag-handle flex-shrink-0 flex items-center h-12 cursor-grab text-gray-500 hover:text-gray-300 mt-1">
-                <svg viewBox="0 0 24 24" class="w-4 h-4" fill="currentColor" aria-hidden="true">
-                  <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
-                  <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
-                  <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
-                </svg>
-              </div>
 
               <!-- Setlist order badge -->
               <div
@@ -155,12 +142,12 @@
                   </div>
                 </div>
 
-                <!-- Song key + notes row -->
-                <div class="mt-2 flex flex-wrap gap-2 items-center">
+                <!-- Song key + BPM row -->
+                <div class="mt-2 flex flex-wrap gap-2 items-center" @click.stop>
                   <select
-                    :value="song.song_key ?? ''"
+                    :value="getDraftKey(song)"
                     class="bg-gray-800 border border-gray-700 text-xs rounded px-2 py-1 text-gray-200 focus:outline-none focus:border-brand-500"
-                    @change="saveSongKey(song, $event.target.value)"
+                    @change="updateDraftKey(song, $event.target.value)"
                   >
                     <option value="">Key…</option>
                     <optgroup label="Major">
@@ -171,61 +158,157 @@
                     </optgroup>
                   </select>
 
-                  <button
-                    class="text-xs text-gray-400 hover:text-white flex items-center gap-1"
-                    @click="toggleNotes(song.id)"
-                  >
-                    <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                      <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/>
-                    </svg>
-                    {{ song.notes ? 'Edit notes' : 'Add notes' }}
-                  </button>
-
-                  <!-- Voice memo -->
-                  <VoiceMemo :song="song" :gig-id="gigId" />
+                  <input
+                    type="text"
+                    inputmode="numeric"
+                    :value="getDraftBpm(song)"
+                    class="bg-gray-800 border border-gray-700 text-xs rounded px-2 py-1 text-gray-200 focus:outline-none focus:border-brand-500 w-20"
+                    placeholder="BPM…"
+                    @input="updateDraftBpm(song, $event.target.value)"
+                  />
                 </div>
 
-                <!-- Notes textarea -->
-                <div v-if="openNotes.has(song.id)" class="mt-2">
-                  <textarea
-                    :value="song.notes ?? ''"
-                    rows="2"
-                    class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 resize-none focus:outline-none focus:border-brand-500"
-                    placeholder="Add notes for this song…"
-                    @blur="saveNotes(song, $event.target.value)"
-                  />
+                <!-- Save / Discard buttons -->
+                <div v-if="hasDraft(song)" class="mt-2 flex items-center gap-2" @click.stop>
+                  <button
+                    class="btn-primary text-xs py-1 px-3"
+                    :disabled="savingIds.has(song.id)"
+                    @click="saveDraft(song)"
+                  >
+                    {{ savingIds.has(song.id) ? 'Saving…' : 'Save' }}
+                  </button>
+                  <button
+                    class="text-xs text-gray-400 hover:text-white"
+                    @click="discardDraft(song)"
+                  >
+                    Discard
+                  </button>
+                  <span v-if="draftErrors[song.id]" class="text-xs text-red-400">{{ draftErrors[song.id] }}</span>
                 </div>
               </div>
             </div>
           </div>
         </template>
-      </draggable>
+      </div>
+        </div>
 
+        <!-- Sidebar (right) -->
+        <div class="space-y-4">
+
+      <!-- Setlist order card -->
+      <div class="card">
+        <h2 class="font-semibold text-sm mb-2">Setlist</h2>
+
+        <div class="space-y-2 mb-3">
+          <div>
+            <label class="block text-[10px] uppercase tracking-wide text-gray-500 mb-1">Search</label>
+            <input
+              v-model="sidebarSearch"
+              type="text"
+              class="w-full bg-gray-800 border border-gray-700 text-xs rounded px-2 py-1.5 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-brand-500"
+              placeholder="Search songs…"
+            />
+          </div>
+          <div>
+            <label class="block text-[10px] uppercase tracking-wide text-gray-500 mb-1">Filter</label>
+            <select
+              v-model="sidebarFilter"
+              class="w-full bg-gray-800 border border-gray-700 text-xs rounded px-2 py-1.5 text-gray-200 focus:outline-none focus:border-brand-500"
+            >
+              <option value="">All</option>
+              <option value="active">Active</option>
+              <option value="cancelled">Inactive</option>
+            </select>
+          </div>
+        </div>
+
+        <div v-if="!orderedSongs.length" class="text-xs text-gray-500">No songs yet.</div>
+
+        <!-- Draggable always -->
+        <draggable
+          v-else
+          v-model="orderedSongs"
+          item-key="id"
+          handle=".sidebar-song-handle"
+          :animation="150"
+          class="space-y-1"
+          @end="onReorder"
+        >
+          <template #item="{ element: song, index: idx }">
+            <div v-show="isSongVisible(song)" class="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gray-800/60 border border-gray-700/50">
+              <div class="sidebar-song-handle cursor-grab text-gray-500 hover:text-gray-300 flex items-center">
+                <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="currentColor" aria-hidden="true">
+                  <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
+                  <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+                  <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
+                </svg>
+              </div>
+              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-brand-700 text-[10px] font-bold text-white flex-shrink-0">{{ idx + 1 }}</span>
+              <span class="text-sm truncate" :class="song.is_cancelled ? 'line-through text-gray-500' : 'text-gray-200'">{{ song.title }}</span>
+            </div>
+          </template>
+        </draggable>
+      </div>
       <!-- Member participation summary -->
-      <div class="card mt-8">
+      <div class="card">
         <h2 class="font-semibold mb-4">Member Participation</h2>
         <div class="divide-y divide-gray-700">
-          <div v-for="member in memberStats" :key="member.user_id" class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3">
-            <div class="flex items-center gap-3 min-w-0 flex-wrap">
+          <div v-for="member in memberStats" :key="member.user_id" class="flex flex-col gap-2 py-3">
+            <div class="flex items-center gap-3 min-w-0">
               <img
                 v-if="member.avatar_url"
                 :src="member.avatar_url"
                 alt="Member avatar"
-                class="w-8 h-8 rounded-full object-cover"
+                class="w-7 h-7 rounded-full object-cover"
               />
-              <div v-else class="w-8 h-8 rounded-full bg-brand-900 flex items-center justify-center text-sm font-bold text-brand-400">
+              <div v-else class="w-7 h-7 rounded-full bg-brand-900 flex items-center justify-center text-sm font-bold text-brand-400">
                 {{ (member.display_name || 'A')[0].toUpperCase() }}
               </div>
-              <span class="text-sm">{{ member.display_name || 'Unknown' }}</span>
-              <span class="text-xs text-gray-500">· {{ member.songsAdded }} song{{ member.songsAdded === 1 ? '' : 's' }} added</span>
+              <div class="min-w-0">
+                <span class="text-sm block truncate">{{ member.display_name || 'Unknown' }}</span>
+                <span class="text-[11px] text-gray-500">{{ member.songsAdded }} song{{ member.songsAdded === 1 ? '' : 's' }} added</span>
+              </div>
             </div>
-            <div class="flex items-center gap-2 text-sm self-start sm:self-auto">
+            <div class="flex items-center text-xs pl-10">
               <span v-if="member.eligibleCount === 0" class="text-gray-400">N/A</span>
-              <span v-else-if="member.votedCount === member.eligibleCount" class="text-green-400">✓ {{ member.votedCount }}/{{ member.eligibleCount }}</span>
+              <span v-else-if="member.votedCount === member.eligibleCount" class="text-green-400">✓ {{ member.votedCount }}/{{ member.eligibleCount }} voted</span>
               <span v-else-if="member.votedCount === 0" class="text-red-400">✗ 0/{{ member.eligibleCount }} voted</span>
               <span v-else class="text-yellow-400">{{ member.votedCount }}/{{ member.eligibleCount }} voted</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Band Roles -->
+      <div v-if="roles.length" class="card">
+        <h2 class="font-semibold text-sm mb-2">Instrument Roles</h2>
+        <div class="flex flex-col gap-1.5">
+          <div
+            v-for="role in roles"
+            :key="role.id"
+            class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-gray-800/60 border border-gray-700/50"
+          >
+            <span class="text-sm">{{ role.icon }}</span>
+            <span class="text-sm font-medium text-gray-200">{{ role.name }}</span>
+            <template v-if="role.profiles">
+              <div class="ml-auto flex items-center gap-1.5">
+                <img
+                  v-if="role.profiles.avatar_url"
+                  :src="role.profiles.avatar_url"
+                  :alt="role.profiles.display_name"
+                  class="w-4 h-4 rounded-full object-cover"
+                />
+                <span
+                  v-else
+                  class="w-4 h-4 rounded-full bg-brand-700 flex items-center justify-center text-[9px] font-bold text-white"
+                >{{ (role.profiles.display_name || '?')[0].toUpperCase() }}</span>
+                <span class="text-xs text-gray-400">{{ role.profiles.display_name }}</span>
+              </div>
+            </template>
+            <span v-else class="ml-auto text-[10px] text-gray-600 italic">unassigned</span>
+          </div>
+        </div>
+      </div>
         </div>
       </div>
     </div>
@@ -234,23 +317,26 @@
 
 <script setup>
 import { ref, computed, reactive, onMounted } from 'vue'
-import { useRoute, RouterLink } from 'vue-router'
+import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import draggable from 'vuedraggable'
 import AppLayout from '../components/AppLayout.vue'
 import AppLoading from '../components/AppLoading.vue'
-import VoiceMemo from '../components/VoiceMemo.vue'
 import { useGigStore } from '../stores/gigs'
 import { useSongStore } from '../stores/songs'
+import { useArrangementStore } from '../stores/arrangements'
 
 const route = useRoute()
+const router = useRouter()
 const gigId = route.params.id
 
 const gigStore = useGigStore()
 const songStore = useSongStore()
+const arrangementStore = useArrangementStore()
 
 const { currentGig: gig } = storeToRefs(gigStore)
 const { songs } = storeToRefs(songStore)
+const { roles } = storeToRefs(arrangementStore)
 const loading = ref(true)
 const loadError = ref('')
 const copyStatus = ref('idle')
@@ -278,20 +364,99 @@ async function onReorder() {
   await Promise.all(updates)
 }
 
-// ─── Notes toggle ─────────────────────────────────────────────────────────────
-const openNotes = reactive(new Set())
-function toggleNotes(songId) {
-  if (openNotes.has(songId)) openNotes.delete(songId)
-  else openNotes.add(songId)
+// ─── Sidebar setlist card ─────────────────────────────────────────────────────
+const sidebarSearch = ref('')
+const sidebarFilter = ref('')
+
+const hasSidebarFilters = computed(() => sidebarSearch.value.trim() || sidebarFilter.value)
+
+function isSongVisible(song) {
+  if (sidebarFilter.value === 'active' && song.is_cancelled) return false
+  if (sidebarFilter.value === 'cancelled' && !song.is_cancelled) return false
+  if (sidebarSearch.value.trim()) {
+    const q = sidebarSearch.value.trim().toLowerCase()
+    if (!song.title.toLowerCase().includes(q) && !(song.artist && song.artist.toLowerCase().includes(q))) return false
+  }
+  return true
 }
 
-async function saveNotes(song, value) {
-  if (value === (song.notes ?? '')) return
-  await songStore.updateSetlistFields(song.id, { notes: value || null })
+// ─── Draft system for key/bpm ─────────────────────────────────────────────────
+const drafts = reactive({}) // songId -> { key, bpm }
+const savingIds = reactive(new Set())
+
+function getDraftKey(song) {
+  return drafts[song.id]?.key ?? song.song_key ?? ''
 }
 
-async function saveSongKey(song, value) {
-  await songStore.updateSetlistFields(song.id, { song_key: value || null })
+function getDraftBpm(song) {
+  return drafts[song.id]?.bpm ?? (song.bpm != null ? String(song.bpm) : '')
+}
+
+function hasDraft(song) {
+  const d = drafts[song.id]
+  if (!d) return false
+  const keyChanged = d.key !== undefined && d.key !== (song.song_key ?? '')
+  const currentBpm = song.bpm != null ? String(song.bpm) : ''
+  const bpmChanged = d.bpm !== undefined && d.bpm !== currentBpm
+  return keyChanged || bpmChanged
+}
+
+function updateDraftKey(song, value) {
+  if (!drafts[song.id]) drafts[song.id] = {}
+  drafts[song.id].key = value
+}
+
+function updateDraftBpm(song, value) {
+  if (!drafts[song.id]) drafts[song.id] = {}
+  drafts[song.id].bpm = value
+}
+
+const draftErrors = reactive({}) // songId -> error message
+let draftErrorTimers = {}
+
+function setDraftError(songId, msg) {
+  draftErrors[songId] = msg
+  if (draftErrorTimers[songId]) clearTimeout(draftErrorTimers[songId])
+  draftErrorTimers[songId] = setTimeout(() => { delete draftErrors[songId] }, 3000)
+}
+
+async function saveDraft(song) {
+  const d = drafts[song.id]
+  if (!d) return
+
+  // Validate BPM is a positive integer (or empty)
+  if (d.bpm !== undefined && d.bpm !== '') {
+    if (!/^\d+$/.test(d.bpm)) {
+      setDraftError(song.id, 'BPM must be a whole number!')
+      return
+    }
+  }
+
+  savingIds.add(song.id)
+  try {
+    const fields = {}
+    if (d.key !== undefined && d.key !== (song.song_key ?? '')) {
+      fields.song_key = d.key || null
+    }
+    const currentBpm = song.bpm != null ? String(song.bpm) : ''
+    if (d.bpm !== undefined && d.bpm !== currentBpm) {
+      fields.bpm = d.bpm ? parseInt(d.bpm, 10) : null
+    }
+    if (Object.keys(fields).length) {
+      await songStore.updateSetlistFields(song.id, fields)
+    }
+    delete drafts[song.id]
+  } finally {
+    savingIds.delete(song.id)
+  }
+}
+
+function discardDraft(song) {
+  delete drafts[song.id]
+}
+
+function goToArrangement(songId) {
+  router.push(`/gigs/${gigId}/songs/${songId}/arrangement`)
 }
 
 async function toggleCancelled(song) {
@@ -300,7 +465,7 @@ async function toggleCancelled(song) {
 
 // ─── Computed ──────────────────────────────────────────────────────────────────
 const popularityRankBySongId = computed(() => {
-  const sorted = [...finalizedSongs.value].sort((a, b) => b.score - a.score)
+  const sorted = [...orderedSongs.value].sort((a, b) => b.score - a.score)
   const ranks = {}
   sorted.forEach((song, idx) => {
     ranks[song.id] = idx + 1
@@ -414,11 +579,11 @@ function buildSummaryText() {
   }
 
   for (const [index, song] of finalizedSongs.value.entries()) {
-    lines.push(`${index + 1}. ${song.title} - ${song.artist}`)
-    lines.push(`   Key: ${song.song_key || '-'}`)
-    lines.push(`   Note: ${song.notes?.trim() || '-'}`)
-    lines.push(`   Memo: ${song.voice_memo_url || '-'}`)
-    lines.push('')
+    const meta = []
+    if (song.song_key) meta.push(`Key: ${song.song_key}`)
+    if (song.bpm) meta.push(`BPM: ${song.bpm}`)
+    const suffix = meta.length ? `  [${meta.join(' | ')}]` : ''
+    lines.push(`${index + 1}. ${song.title} - ${song.artist}${suffix}`)
   }
 
   return lines.join('\n').trimEnd()
@@ -469,8 +634,8 @@ onMounted(async () => {
     await Promise.all([
       gigStore.fetchGig(gigId),
       songStore.fetchSongs(gigId),
+      arrangementStore.fetchRoles(gigId),
     ])
-    await songStore.pruneStaleMemos()
     initOrder()
   } catch (e) {
     loadError.value = e?.message || 'Something went wrong while loading this summary.'

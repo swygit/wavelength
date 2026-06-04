@@ -489,9 +489,9 @@ export const useSongStore = defineStore('songs', () => {
   }
 
   async function updateSetlistFields(songId, fields) {
-    // fields: any subset of { setlist_order, song_key, notes, is_cancelled, voice_memo_url }
+    // fields: any subset of { setlist_order, song_key, is_cancelled, bpm }
     const allowed = {}
-    for (const key of ['setlist_order', 'song_key', 'notes', 'is_cancelled', 'voice_memo_url']) {
+    for (const key of ['setlist_order', 'song_key', 'is_cancelled', 'bpm']) {
       if (key in fields) allowed[key] = fields[key]
     }
     const { error } = await supabase.from('songs').update(allowed).eq('id', songId)
