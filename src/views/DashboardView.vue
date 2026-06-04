@@ -8,7 +8,7 @@
           <p class="text-gray-400 text-sm mt-1">Select a gig or create a new one</p>
         </div>
         <div class="flex gap-2">
-          <button class="btn-secondary text-sm" @click="showCreateFolder = true">+ Add folder</button>
+          <button class="btn-primary text-sm" @click="showCreateFolder = true">+ Add folder</button>
           <RouterLink to="/join" class="btn-secondary text-sm">Join gig</RouterLink>
           <RouterLink to="/gigs/new" class="btn-primary text-sm">+ New gig</RouterLink>
         </div>

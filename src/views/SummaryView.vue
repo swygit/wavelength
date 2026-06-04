@@ -9,23 +9,23 @@
     </div>
 
     <div v-else-if="gig" class="max-w-5xl mx-auto">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+      <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
         <div>
           <RouterLink :to="`/gigs/${gigId}`" class="text-sm text-gray-400 hover:text-white inline-flex items-center gap-1 mb-2">
             ← Back to gig
           </RouterLink>
-          <h1 class="text-2xl font-bold">Final Setlist</h1>
-          <p class="text-gray-400 text-sm mt-1">{{ gig.name }}</p>
-        </div>
-        <div class="flex flex-col sm:items-end gap-2 self-start sm:self-auto">
-          <span class="text-xs px-2 py-1 rounded-full bg-red-900 text-red-300 self-start sm:self-auto">Voting Closed</span>
-          <div class="flex items-center gap-2">
-            <button class="btn-secondary text-xs" :disabled="!orderedSongs.length" @click="copySummaryAsText">
-              Export setlist
-            </button>
-            <span v-if="copyStatus === 'copied'" class="text-[11px] text-green-400">Copied</span>
-            <span v-else-if="copyStatus === 'error'" class="text-[11px] text-red-400">Copy failed</span>
+          <div class="flex items-center gap-2 mb-2">
+            <h1 class="text-2xl font-bold">{{ gig.name }}</h1>
+            <span class="text-xs px-2 py-1 rounded-full bg-red-900 text-red-300">Voting Closed</span>
           </div>
+          <p v-if="gig.description" class="text-gray-400 text-sm mt-1">{{ gig.description }}</p>
+        </div>
+        <div class="flex items-center gap-2 self-start sm:self-auto">
+          <button class="btn-secondary text-xs" :disabled="!orderedSongs.length" @click="copySummaryAsText">
+            Export setlist
+          </button>
+          <span v-if="copyStatus === 'copied'" class="text-[11px] text-green-400">Copied</span>
+          <span v-else-if="copyStatus === 'error'" class="text-[11px] text-red-400">Copy failed</span>
         </div>
       </div>
 
