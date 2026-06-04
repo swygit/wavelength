@@ -92,7 +92,6 @@
             :voting-open="gig.status === 'open'"
             :selected="song.id === selectedSongId"
             :members-map="membersMap"
-            :added-order="songAddedOrderMap[song.id]"
             @select="selectSong"
             @deleted="onSongDeleted"
           />
@@ -164,9 +163,6 @@
               >
                 <div class="flex items-start justify-between gap-2">
                   <div class="flex items-start gap-2 min-w-0">
-                    <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-700 text-[11px] font-semibold text-gray-200 mt-0.5">
-                      {{ songAddedOrderMap[song.id] }}
-                    </span>
                     <div class="min-w-0">
                       <p class="text-sm text-gray-100 truncate">{{ song.title }}</p>
                       <p class="text-xs text-gray-400 truncate">{{ song.artist || 'Unknown artist' }}</p>
@@ -185,6 +181,161 @@
           </div>
 
           <NaughtyList :gig="gig" :songs="songs" />
+
+          <!-- Roles card -->
+          <div class="card">
+            <div class="flex items-center justify-between mb-2">
+              <h2 class="font-semibold text-sm">Instrument Roles</h2>
+              <button
+                v-if="showRolesPanel"
+                class="text-xs font-medium px-3 py-1 rounded-lg bg-brand-600 hover:bg-brand-500 text-white transition-colors"
+                @click="showRolesPanel = false"
+              >
+                Done
+              </button>
+              <button
+                v-else
+                class="text-xs text-gray-400 hover:text-white transition-colors px-2 py-0.5 rounded hover:bg-gray-800"
+                @click="showRolesPanel = true"
+              >
+                Edit
+              </button>
+            </div>
+
+            <!-- Collapsed: show role badges with member info -->
+            <div v-if="!showRolesPanel" class="flex flex-col gap-1.5">
+              <div v-if="!roles.length" class="text-xs text-gray-500">No roles defined yet.</div>
+              <div
+                v-for="role in roles"
+                :key="role.id"
+                class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-gray-800/60 border border-gray-700/50"
+              >
+                <span class="text-sm">{{ role.icon }}</span>
+                <span class="text-sm font-medium text-gray-200">{{ role.name }}</span>
+                <template v-if="role.profiles">
+                  <div class="ml-auto flex items-center gap-1.5">
+                    <img
+                      v-if="role.profiles.avatar_url"
+                      :src="role.profiles.avatar_url"
+                      :alt="role.profiles.display_name"
+                      class="w-4 h-4 rounded-full object-cover"
+                    />
+                    <span
+                      v-else
+                      class="w-4 h-4 rounded-full bg-brand-700 flex items-center justify-center text-[9px] font-bold text-white"
+                    >{{ (role.profiles.display_name || '?')[0].toUpperCase() }}</span>
+                    <span class="text-xs text-gray-400">{{ role.profiles.display_name }}</span>
+                  </div>
+                </template>
+                <span v-else class="ml-auto text-[10px] text-gray-600 italic">unassigned</span>
+              </div>
+            </div>
+
+            <!-- Expanded: full CRUD + member assignment -->
+            <div v-else class="space-y-2">
+              <div
+                v-for="role in roles"
+                :key="role.id"
+                class="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-gray-800 border border-gray-700"
+              >
+                <button
+                  class="text-sm flex-shrink-0 hover:scale-110 transition-transform"
+                  :title="'Change icon'"
+                  @click="cycleExistingRoleIcon(role)"
+                >{{ role.icon }}</button>
+                <span class="text-sm font-medium text-gray-200 min-w-0 truncate">{{ role.name }}</span>
+                <div class="ml-auto relative flex-shrink-0">
+                  <button
+                    class="flex items-center gap-1.5 bg-gray-900 border border-gray-700 text-xs rounded px-2 py-1 text-gray-300 hover:border-gray-500 transition-colors max-w-[9rem]"
+                    @click="openRoleDropdown = openRoleDropdown === role.id ? null : role.id"
+                  >
+                    <template v-if="role.profiles">
+                      <img
+                        v-if="role.profiles.avatar_url"
+                        :src="role.profiles.avatar_url"
+                        :alt="role.profiles.display_name"
+                        class="w-4 h-4 rounded-full object-cover"
+                      />
+                      <span
+                        v-else
+                        class="w-4 h-4 rounded-full bg-brand-700 flex items-center justify-center text-[9px] font-bold text-white"
+                      >{{ (role.profiles.display_name || '?')[0].toUpperCase() }}</span>
+                      <span class="truncate">{{ role.profiles.display_name }}</span>
+                    </template>
+                    <span v-else class="text-gray-500 italic">Unassigned</span>
+                    <svg viewBox="0 0 20 20" class="w-3 h-3 text-gray-500 flex-shrink-0" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                  </button>
+                  <div
+                    v-if="openRoleDropdown === role.id"
+                    class="absolute right-0 top-full mt-1 z-20 bg-gray-900 border border-gray-700 rounded-lg shadow-xl py-1 min-w-[10rem] max-h-48 overflow-y-auto"
+                  >
+                    <button
+                      class="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-800 transition-colors flex items-center gap-2"
+                      :class="!role.member_id ? 'text-brand-400' : 'text-gray-400'"
+                      @click="handleAssignMember(role, ''); openRoleDropdown = null"
+                    >
+                      <span class="w-4 h-4 rounded-full bg-gray-700 flex items-center justify-center text-[9px] text-gray-500">?</span>
+                      Unassigned
+                    </button>
+                    <button
+                      v-for="member in gigMembers"
+                      :key="member.user_id"
+                      class="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-800 transition-colors flex items-center gap-2"
+                      :class="role.member_id === member.user_id ? 'text-brand-400' : 'text-gray-300'"
+                      @click="handleAssignMember(role, member.user_id); openRoleDropdown = null"
+                    >
+                      <img
+                        v-if="member.profiles?.avatar_url"
+                        :src="member.profiles.avatar_url"
+                        :alt="member.profiles.display_name"
+                        class="w-4 h-4 rounded-full object-cover"
+                      />
+                      <span
+                        v-else
+                        class="w-4 h-4 rounded-full bg-brand-700 flex items-center justify-center text-[9px] font-bold text-white"
+                      >{{ (member.profiles?.display_name || '?')[0].toUpperCase() }}</span>
+                      {{ member.profiles?.display_name || 'Unknown' }}
+                    </button>
+                  </div>
+                </div>
+                <button
+                  class="text-gray-500 hover:text-red-400 text-xs flex-shrink-0 transition-colors"
+                  title="Remove role"
+                  @click="confirmDeleteRole(role)"
+                >
+                  ×
+                </button>
+              </div>
+
+              <!-- Inline add role -->
+              <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-dashed border-gray-600">
+                <button
+                  class="w-6 h-6 rounded-full flex items-center justify-center text-sm hover:bg-gray-700 transition-colors flex-shrink-0"
+                  :title="'Icon: ' + newRoleIcon"
+                  @click="cycleRoleIcon"
+                >
+                  {{ newRoleIcon }}
+                </button>
+                <input
+                  ref="roleNameInput"
+                  v-model="newRoleName"
+                  type="text"
+                  class="bg-transparent border-none text-sm text-gray-100 placeholder-gray-500 focus:outline-none flex-1 min-w-0"
+                  placeholder="New role name…"
+                  maxlength="40"
+                  @keydown.enter="handleCreateRole"
+                />
+                <button
+                  class="text-brand-400 hover:text-brand-300 text-xs font-medium flex-shrink-0 disabled:opacity-40"
+                  :disabled="!newRoleName.trim() || creatingRole"
+                  @click="handleCreateRole"
+                >
+                  Add
+                </button>
+              </div>
+              <p class="text-[11px] text-gray-500">Tip: Anything you add here will show up in the summary page after voting. For example, you can add a role for your drum machine if you want to make notes about its configuration for each song.</p>
+            </div>
+          </div>
 
           <div ref="songPlayerRef">
             <SongPlayer v-if="selectedSong" :song="selectedSong" @clear="selectedSongId = null" />
@@ -228,6 +379,24 @@
           <button class="btn-danger text-sm" :disabled="statusSaving" @click="confirmCloseVoting">
             {{ statusSaving ? 'Closing…' : 'Yes, close voting' }}
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete role confirmation modal -->
+    <div
+      v-if="roleToDelete"
+      class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      @click.self="roleToDelete = null"
+    >
+      <div class="w-full max-w-md card border border-red-500/40">
+        <h2 class="text-lg font-bold mb-2">Delete role?</h2>
+        <p class="text-sm text-gray-300 mb-4">
+          This will remove <span class="font-semibold text-white">"{{ roleToDelete.name }}"</span> from all sections in every song in this gig. Any notes, links, and voice memos for this role will be permanently deleted.
+        </p>
+        <div class="flex justify-end gap-2">
+          <button class="btn-secondary text-sm" @click="roleToDelete = null">Cancel</button>
+          <button class="btn-danger text-sm" @click="handleDeleteRole">Delete</button>
         </div>
       </div>
     </div>
@@ -311,7 +480,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import AppLayout from '../components/AppLayout.vue'
@@ -325,6 +494,7 @@ import { useGigStore } from '../stores/gigs'
 import { useSongStore } from '../stores/songs'
 import { useAuthStore } from '../stores/auth'
 import { useFolderStore } from '../stores/folders'
+import { useArrangementStore } from '../stores/arrangements'
 import { supabase } from '../lib/supabase'
 import confetti from 'canvas-confetti'
 
@@ -336,9 +506,11 @@ const gigStore = useGigStore()
 const songStore = useSongStore()
 const authStore = useAuthStore()
 const folderStore = useFolderStore()
+const arrangementStore = useArrangementStore()
 
 const { currentGig: gig } = storeToRefs(gigStore)
 const { songs } = storeToRefs(songStore)
+const { roles } = storeToRefs(arrangementStore)
 
 const gigFolderId = ref(null)
 const backLink = computed(() => gigFolderId.value ? `/folders/${gigFolderId.value}` : '/dashboard')
@@ -373,15 +545,39 @@ const activitySummary = ref({
   comment_updates: [],
 })
 
+// Role management state
+const showRolesPanel = ref(false)
+const openRoleDropdown = ref(null)
+const newRoleName = ref('')
+const newRoleIcon = ref('🎵')
+const creatingRole = ref(false)
+const roleNameInput = ref(null)
+const roleToDelete = ref(null)
+const instrumentIcons = [
+  { icon: '🎤', label: 'Vocals' },
+  { icon: '🎸', label: 'Guitar' },
+  { icon: '🎹', label: 'Keys/Piano' },
+  { icon: '🥁', label: 'Drums' },
+  { icon: '🎵', label: 'General' },
+  { icon: '🎷', label: 'Saxophone' },
+  { icon: '🎺', label: 'Trumpet/Brass' },
+  { icon: '🪕', label: 'Banjo/Strings' },
+  { icon: '🎻', label: 'Violin/Strings' },
+  { icon: '🪗', label: 'Accordion' },
+  { icon: '🪘', label: 'Percussion' },
+  { icon: '💻', label: 'Electronics/Synth' },
+]
+
+watch(showRolesPanel, (val) => {
+  if (val) {
+    newRoleName.value = ''
+    newRoleIcon.value = '🎵'
+    nextTick(() => roleNameInput.value?.focus())
+  }
+})
+
 const isOwner = computed(() => gig.value?.owner_id === authStore.user?.id)
 const selectedSong = computed(() => songs.value.find((song) => song.id === selectedSongId.value) || null)
-const songAddedOrderMap = computed(() => {
-  const map = {}
-  songs.value.forEach((song, idx) => {
-    map[song.id] = idx + 1
-  })
-  return map
-})
 const voteStatusBySongId = computed(() => {
   const map = {}
   const myUserId = authStore.user?.id
@@ -459,12 +655,65 @@ const membersMap = computed(() => {
 const transferableMembers = computed(() =>
   (gig.value?.gig_members ?? []).filter((member) => member.user_id !== authStore.user?.id)
 )
+const gigMembers = computed(() => gig.value?.gig_members ?? [])
 const canDeleteGig = computed(() => isOwner.value && transferableMembers.value.length === 0)
+
+// ─── Role actions ─────────────────────────────────────────────────────────────
+
+function cycleRoleIcon() {
+  const icons = instrumentIcons.map((i) => i.icon)
+  const idx = icons.indexOf(newRoleIcon.value)
+  newRoleIcon.value = icons[(idx + 1) % icons.length]
+}
+
+function cycleExistingRoleIcon(role) {
+  const icons = instrumentIcons.map((i) => i.icon)
+  const idx = icons.indexOf(role.icon)
+  const nextIcon = icons[(idx + 1) % icons.length]
+  arrangementStore.updateRole(role.id, { icon: nextIcon })
+}
+
+async function handleAssignMember(role, memberId) {
+  try {
+    await arrangementStore.updateRole(role.id, { member_id: memberId || null })
+  } catch (e) {
+    console.error('Assign member error:', e)
+  }
+}
+
+async function handleCreateRole() {
+  if (!newRoleName.value.trim()) return
+  creatingRole.value = true
+  try {
+    await arrangementStore.createRole(gigId, newRoleName.value, newRoleIcon.value)
+    newRoleName.value = ''
+    newRoleIcon.value = '🎵'
+  } catch (e) {
+    console.error('Create role error:', e)
+  } finally {
+    creatingRole.value = false
+  }
+}
+
+function confirmDeleteRole(role) {
+  roleToDelete.value = role
+}
+
+async function handleDeleteRole() {
+  if (!roleToDelete.value) return
+  try {
+    await arrangementStore.deleteRole(roleToDelete.value.id)
+  } catch (e) {
+    console.error('Delete role error:', e)
+  }
+  roleToDelete.value = null
+}
 
 onMounted(async () => {
   try {
     await gigStore.fetchGig(gigId)
     await songStore.fetchSongs(gigId)
+    await arrangementStore.fetchRoles(gigId)
     songStore.subscribeToGig(gigId)
     subscribeMembershipChanges()
 

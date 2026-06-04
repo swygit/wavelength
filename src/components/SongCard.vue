@@ -109,12 +109,6 @@
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
             <div class="flex items-center gap-2 min-w-0">
-              <span
-                v-if="addedOrder"
-                class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-700 text-[11px] font-semibold text-gray-200 flex-shrink-0"
-              >
-                {{ addedOrder }}
-              </span>
               <div class="font-semibold truncate">{{ song.title }}</div>
             </div>
             <div class="text-sm text-gray-400 truncate">{{ song.artist }}</div>
