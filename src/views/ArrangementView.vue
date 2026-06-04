@@ -39,7 +39,7 @@
           </button>
           <span v-if="exportStatus === 'copied'" class="text-[11px] text-green-400">Copied</span>
           <span v-else-if="exportStatus === 'error'" class="text-[11px] text-red-400">Copy failed</span>
-          <button class="btn-secondary text-xs" @click="showAddSection = true">+ Add section</button>
+          <button class="btn-primary text-xs" @click="showAddSection = true">+ Add section</button>
         </div>
       </div>
 
