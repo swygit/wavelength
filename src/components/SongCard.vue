@@ -226,6 +226,7 @@
           <div>
             <div class="flex items-center gap-2">
               <span class="font-medium text-xs text-gray-300">{{ comment.profiles?.display_name || 'Unknown' }}</span>
+              <span class="text-[10px] text-gray-500">{{ formatCommentTime(comment.created_at) }}</span>
               <span v-if="isEditedComment(comment)" class="text-[10px] text-gray-500">(Edited)</span>
               <button
                 v-if="canEditComment(comment) && editingCommentId !== comment.id"
@@ -433,6 +434,21 @@ async function saveEditedComment(comment) {
 function isEditedComment(comment) {
   if (!comment?.updated_at || !comment?.created_at) return false
   return new Date(comment.updated_at).getTime() > new Date(comment.created_at).getTime()
+}
+
+function formatCommentTime(dateStr) {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now - date
+  const diffMins = Math.floor(diffMs / 60000)
+  if (diffMins < 1) return 'just now'
+  if (diffMins < 60) return `${diffMins}m ago`
+  const diffHours = Math.floor(diffMins / 60)
+  if (diffHours < 24) return `${diffHours}h ago`
+  const diffDays = Math.floor(diffHours / 24)
+  if (diffDays < 7) return `${diffDays}d ago`
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 function getCommentSegments(body) {
