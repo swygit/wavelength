@@ -6,6 +6,7 @@ export const useArrangementStore = defineStore('arrangements', () => {
   const roles = ref([])
   const sections = ref([])
   const entries = ref([])
+  const setlistSections = ref([])
   const loading = ref(false)
 
   const READ_TIMEOUT = 15000
@@ -321,16 +322,93 @@ export const useArrangementStore = defineStore('arrangements', () => {
     await upsertEntry(sectionId, roleId, { voice_memo_url: null })
   }
 
+  // ─── Setlist Sections (per gig, interspersed with songs) ────────────────────
+
+  async function fetchSetlistSections(gigId) {
+    const { data, error } = await withTimeout(
+      supabase
+        .from('setlist_sections')
+        .select('*')
+        .eq('gig_id', gigId)
+        .order('setlist_order', { ascending: true }),
+      READ_TIMEOUT,
+      'Loading setlist sections timed out.'
+    )
+    if (error) throw new Error(error.message)
+    setlistSections.value = data ?? []
+  }
+
+  async function createSetlistSection(gigId, name, setlistOrder) {
+    const { data, error } = await withTimeout(
+      supabase
+        .from('setlist_sections')
+        .insert({ gig_id: gigId, name: name.trim(), setlist_order: setlistOrder ?? 0 })
+        .select()
+        .single(),
+      WRITE_TIMEOUT,
+      'Creating setlist section timed out.'
+    )
+    if (error) throw new Error(error.message)
+    setlistSections.value.push(data)
+    return data
+  }
+
+  async function updateSetlistSection(sectionId, fields) {
+    const allowed = {}
+    for (const key of ['name', 'notes', 'setlist_order']) {
+      if (key in fields) allowed[key] = fields[key]
+    }
+    allowed.updated_at = new Date().toISOString()
+    const { data, error } = await withTimeout(
+      supabase
+        .from('setlist_sections')
+        .update(allowed)
+        .eq('id', sectionId)
+        .select()
+        .single(),
+      WRITE_TIMEOUT,
+      'Updating setlist section timed out.'
+    )
+    if (error) throw new Error(error.message)
+    const idx = setlistSections.value.findIndex((s) => s.id === sectionId)
+    if (idx !== -1) setlistSections.value[idx] = data
+    return data
+  }
+
+  async function deleteSetlistSection(sectionId) {
+    const { error } = await withTimeout(
+      supabase.from('setlist_sections').delete().eq('id', sectionId),
+      WRITE_TIMEOUT,
+      'Deleting setlist section timed out.'
+    )
+    if (error) throw new Error(error.message)
+    setlistSections.value = setlistSections.value.filter((s) => s.id !== sectionId)
+  }
+
+  async function reorderSetlistSections(updates) {
+    // updates: array of { id, setlist_order }
+    const promises = updates.map(({ id, setlist_order }) =>
+      supabase.from('setlist_sections').update({ setlist_order }).eq('id', id)
+    )
+    await withTimeout(Promise.all(promises), WRITE_TIMEOUT, 'Reordering setlist sections timed out.')
+    for (const { id, setlist_order } of updates) {
+      const sec = setlistSections.value.find((s) => s.id === id)
+      if (sec) sec.setlist_order = setlist_order
+    }
+  }
+
   function $reset() {
     roles.value = []
     sections.value = []
     entries.value = []
+    setlistSections.value = []
   }
 
   return {
     roles,
     sections,
     entries,
+    setlistSections,
     loading,
     fetchRoles,
     createRole,
@@ -352,6 +430,11 @@ export const useArrangementStore = defineStore('arrangements', () => {
     uploadEntryMemo,
     deleteEntryMemo,
     uploadMemoFile,
+    fetchSetlistSections,
+    createSetlistSection,
+    updateSetlistSection,
+    deleteSetlistSection,
+    reorderSetlistSections,
     $reset,
   }
 })

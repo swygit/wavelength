@@ -187,6 +187,19 @@ create table if not exists public.arrangement_entries (
 
 alter table public.arrangement_entries enable row level security;
 
+-- ─── SETLIST SECTIONS (gig-level sections interspersed with songs) ───────────
+create table if not exists public.setlist_sections (
+  id             uuid primary key default gen_random_uuid(),
+  gig_id         uuid not null references public.gigs(id) on delete cascade,
+  name           text not null,
+  notes          text,
+  setlist_order  int not null default 0,
+  created_at     timestamptz default now() not null,
+  updated_at     timestamptz default now() not null
+);
+
+alter table public.setlist_sections enable row level security;
+
 
 -- ============================================================================
 -- INDEXES
@@ -200,3 +213,4 @@ create index if not exists idx_gig_roles_member_id on public.gig_roles(member_id
 create index if not exists idx_arrangement_sections_song_id on public.arrangement_sections(song_id);
 create index if not exists idx_arrangement_entries_section_id on public.arrangement_entries(section_id);
 create index if not exists idx_arrangement_entries_role_id on public.arrangement_entries(role_id);
+create index if not exists idx_setlist_sections_gig_id on public.setlist_sections(gig_id);
