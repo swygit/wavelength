@@ -21,7 +21,8 @@
           <p v-if="gig.description" class="text-gray-400 text-sm mt-1">{{ gig.description }}</p>
         </div>
         <div class="flex items-center gap-2 self-start sm:self-auto">
-          <button class="btn-secondary text-xs" :disabled="!orderedSongs.length" @click="copySummaryAsText">
+          <button class="btn-primary text-xs" @click="showAddSetlistSection = true">+ Add section</button>
+          <button class="btn-secondary text-xs" :disabled="!orderedItems.length" @click="copySummaryAsText">
             Export setlist
           </button>
           <span v-if="copyStatus === 'copied'" class="text-[11px] text-green-400">Copied</span>
@@ -79,22 +80,90 @@
       <div class="grid lg:grid-cols-3 gap-6">
         <!-- Song list (left / main) -->
         <div class="lg:col-span-2">
-      <!-- Ranked / reorderable songs -->
-      <div v-if="!orderedSongs.length" class="card text-center py-10 text-gray-400">
+      <!-- Ranked / reorderable items (songs + sections) -->
+      <div v-if="!orderedItems.length" class="card text-center py-10 text-gray-400">
         No songs were added to this gig.
       </div>
 
       <div v-else class="space-y-3">
-        <template v-for="(song, idx) in orderedSongs" :key="song.id">
-          <div v-show="isSongVisible(song)" class="card relative cursor-pointer hover:border-brand-500 transition-colors" :class="song.is_cancelled ? 'opacity-60 border-gray-600' : ''" @click="goToArrangement(song.id)">
+        <template v-for="(item, idx) in orderedItems" :key="item.id">
+          <!-- Setlist Section Card -->
+          <div v-if="item._type === 'section'" class="card relative border-amber-700/40 bg-gradient-to-r from-amber-900/20 to-gray-900">
+            <div class="flex items-start gap-3">
+              <div class="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center font-bold text-base mt-0.5 bg-amber-700 text-white">
+                §
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="min-w-0">
+                    <div v-if="editingSetlistSectionId !== item.id" class="font-semibold truncate">{{ item.name }}</div>
+                    <input
+                      v-else
+                      ref="setlistSectionNameInput"
+                      v-model="editSetlistSectionName"
+                      class="bg-gray-800 border border-gray-600 rounded px-2 py-0.5 text-sm text-gray-100 focus:outline-none focus:border-brand-500"
+                      @keydown.enter="saveSetlistSectionRename(item)"
+                      @keydown.escape="editingSetlistSectionId = null"
+                      @blur="saveSetlistSectionRename(item)"
+                    />
+                  </div>
+                  <div class="flex items-center gap-1">
+                    <button
+                      class="text-gray-500 hover:text-white text-xs px-1.5 py-0.5 rounded hover:bg-gray-700 transition-colors"
+                      title="Rename section"
+                      @click="startSetlistSectionRename(item)"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      class="text-gray-500 hover:text-red-400 text-xs px-1.5 py-0.5 rounded hover:bg-gray-700 transition-colors"
+                      title="Delete section"
+                      @click="confirmDeleteSetlistSection(item)"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+                <!-- Notes -->
+                <div class="mt-2">
+                  <div v-if="editingSetlistSectionNotesId !== item.id">
+                    <p v-if="item.notes" class="text-xs text-gray-300 whitespace-pre-wrap leading-relaxed">{{ item.notes }}</p>
+                    <button
+                      class="text-xs text-gray-500 hover:text-white mt-1"
+                      @click="startEditSetlistSectionNotes(item)"
+                    >
+                      {{ item.notes ? 'Edit notes' : '+ Add notes' }}
+                    </button>
+                  </div>
+                  <div v-else>
+                    <textarea
+                      ref="setlistSectionNotesInput"
+                      v-model="editSetlistSectionNotes"
+                      class="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-brand-500 resize-none"
+                      rows="3"
+                      placeholder="Add notes for this section…"
+                      @keydown.escape="editingSetlistSectionNotesId = null"
+                    ></textarea>
+                    <div class="flex items-center gap-2 mt-1">
+                      <button class="btn-primary text-xs py-0.5 px-2" @click="saveSetlistSectionNotes(item)">Save</button>
+                      <button class="text-xs text-gray-400 hover:text-white" @click="editingSetlistSectionNotesId = null">Cancel</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Song Card (existing) -->
+          <div v-else v-show="isSongVisible(item)" class="card relative transition-colors" :class="item.is_cancelled ? 'opacity-60 border-gray-600' : 'cursor-pointer hover:border-brand-500'" @click="!item.is_cancelled && goToArrangement(item.id)">
             <!-- Cross-out toggle: top-right corner -->
             <button
               class="absolute top-3.5 right-4 w-5 h-5 rounded-full flex items-center justify-center transition-all"
-              :class="song.is_cancelled ? 'bg-green-500/20 text-green-300 hover:bg-green-500/35' : 'bg-red-500/25 text-red-300 hover:bg-red-500/45'"
-              :title="song.is_cancelled ? 'Restore song' : 'Cross out'"
-              @click.stop="toggleCancelled(song)"
+              :class="item.is_cancelled ? 'bg-green-500/20 text-green-300 hover:bg-green-500/35' : 'bg-red-500/25 text-red-300 hover:bg-red-500/45'"
+              :title="item.is_cancelled ? 'Restore song' : 'Cross out'"
+              @click.stop="toggleCancelled(item)"
             >
-              <svg v-if="song.is_cancelled" viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+              <svg v-if="item.is_cancelled" viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
                 <path d="M3 12h18M9 6l-6 6 6 6" />
               </svg>
               <svg v-else viewBox="0 0 24 24" class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
@@ -106,22 +175,22 @@
               <!-- Setlist order badge -->
               <div
                 class="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center font-bold text-base mt-1.5"
-                :class="song.is_cancelled ? 'bg-gray-700 text-gray-300' : 'bg-brand-700 text-white'"
+                :class="item.is_cancelled ? 'bg-gray-700 text-gray-300' : 'bg-brand-700 text-white'"
               >
-                {{ song.is_cancelled ? '✕' : idx + 1 }}
+                {{ item.is_cancelled ? '✕' : songDisplayIndex(item) }}
               </div>
 
               <!-- Album art -->
-              <img v-if="song.album_art" :src="song.album_art" :alt="song.album" class="w-12 h-12 rounded object-cover flex-shrink-0 mt-0.5" />
+              <img v-if="item.album_art" :src="item.album_art" :alt="item.album" class="w-12 h-12 rounded object-cover flex-shrink-0 mt-0.5" />
               <div v-else class="w-12 h-12 rounded bg-gray-700 flex items-center justify-center flex-shrink-0 mt-0.5 text-xl">🎵</div>
 
               <!-- Song info + editable fields -->
               <div class="flex-1 min-w-0">
                 <div class="flex items-start justify-between gap-2">
                   <div class="min-w-0">
-                    <div class="font-semibold truncate" :class="song.is_cancelled ? 'line-through text-gray-400' : ''">{{ song.title }}</div>
-                    <div class="text-sm text-gray-400 truncate" :class="song.is_cancelled ? 'line-through text-gray-500' : ''">{{ song.artist }}</div>
-                    <div v-if="song.votes.filter(v => v.value !== 0).length === 0" class="mt-1">
+                    <div class="font-semibold truncate" :class="item.is_cancelled ? 'line-through text-gray-400' : ''">{{ item.title }}</div>
+                    <div class="text-sm text-gray-400 truncate" :class="item.is_cancelled ? 'line-through text-gray-500' : ''">{{ item.artist }}</div>
+                    <div v-if="item.votes.filter(v => v.value !== 0).length === 0" class="mt-1">
                       <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-700 text-gray-400">No votes</span>
                     </div>
                   </div>
@@ -129,15 +198,15 @@
                   <div class="text-right flex-shrink-0 pr-6">
                     <div class="text-xs mb-0.5">
                       <span class="px-1.5 py-0.5 rounded-full bg-gray-700 text-gray-300">
-                        <template v-if="!song.is_cancelled && popularityRankBySongId[song.id] === 1">🥇 1st</template>
-                        <template v-else-if="!song.is_cancelled && popularityRankBySongId[song.id] === 2">🥈 2nd</template>
-                        <template v-else-if="!song.is_cancelled && popularityRankBySongId[song.id] === 3">🥉 3rd</template>
-                        <template v-else-if="!song.is_cancelled">{{ ordinal(popularityRankBySongId[song.id]) }}</template>
+                        <template v-if="!item.is_cancelled && popularityRankBySongId[item.id] === 1">🥇 1st</template>
+                        <template v-else-if="!item.is_cancelled && popularityRankBySongId[item.id] === 2">🥈 2nd</template>
+                        <template v-else-if="!item.is_cancelled && popularityRankBySongId[item.id] === 3">🥉 3rd</template>
+                        <template v-else-if="!item.is_cancelled">{{ ordinal(popularityRankBySongId[item.id]) }}</template>
                         <template v-else>—</template>
                       </span>
                     </div>
-                    <div class="text-xl font-bold" :class="song.is_cancelled ? 'text-gray-600' : song.score > 0 ? 'text-green-400' : song.score < 0 ? 'text-red-400' : 'text-gray-400'">
-                      {{ song.is_cancelled ? '–' : (song.score > 0 ? '+' : '') + song.score }}
+                    <div class="text-xl font-bold" :class="item.is_cancelled ? 'text-gray-600' : item.score > 0 ? 'text-green-400' : item.score < 0 ? 'text-red-400' : 'text-gray-400'">
+                      {{ item.is_cancelled ? '–' : (item.score > 0 ? '+' : '') + item.score }}
                     </div>
                   </div>
                 </div>
@@ -145,9 +214,9 @@
                 <!-- Song key + BPM row -->
                 <div class="mt-2 flex flex-wrap gap-2 items-center" @click.stop>
                   <select
-                    :value="getDraftKey(song)"
+                    :value="getDraftKey(item)"
                     class="bg-gray-800 border border-gray-700 text-xs rounded px-2 py-1 text-gray-200 focus:outline-none focus:border-brand-500"
-                    @change="updateDraftKey(song, $event.target.value)"
+                    @change="updateDraftKey(item, $event.target.value)"
                   >
                     <option value="">Key…</option>
                     <optgroup label="Major">
@@ -161,29 +230,29 @@
                   <input
                     type="text"
                     inputmode="numeric"
-                    :value="getDraftBpm(song)"
+                    :value="getDraftBpm(item)"
                     class="bg-gray-800 border border-gray-700 text-xs rounded px-2 py-1 text-gray-200 focus:outline-none focus:border-brand-500 w-20"
                     placeholder="BPM…"
-                    @input="updateDraftBpm(song, $event.target.value)"
+                    @input="updateDraftBpm(item, $event.target.value)"
                   />
                 </div>
 
                 <!-- Save / Discard buttons -->
-                <div v-if="hasDraft(song)" class="mt-2 flex items-center gap-2" @click.stop>
+                <div v-if="hasDraft(item)" class="mt-2 flex items-center gap-2" @click.stop>
                   <button
                     class="btn-primary text-xs py-1 px-3"
-                    :disabled="savingIds.has(song.id)"
-                    @click="saveDraft(song)"
+                    :disabled="savingIds.has(item.id)"
+                    @click="saveDraft(item)"
                   >
-                    {{ savingIds.has(song.id) ? 'Saving…' : 'Save' }}
+                    {{ savingIds.has(item.id) ? 'Saving…' : 'Save' }}
                   </button>
                   <button
                     class="text-xs text-gray-400 hover:text-white"
-                    @click="discardDraft(song)"
+                    @click="discardDraft(item)"
                   >
                     Discard
                   </button>
-                  <span v-if="draftErrors[song.id]" class="text-xs text-red-400">{{ draftErrors[song.id] }}</span>
+                  <span v-if="draftErrors[item.id]" class="text-xs text-red-400">{{ draftErrors[item.id] }}</span>
                 </div>
               </div>
             </div>
@@ -222,20 +291,24 @@
           </div>
         </div>
 
-        <div v-if="!orderedSongs.length" class="text-xs text-gray-500">No songs yet.</div>
+        <div v-if="!orderedItems.length" class="text-xs text-gray-500">No songs yet.</div>
 
-        <!-- Draggable always -->
+        <!-- Draggable unified list -->
         <draggable
           v-else
-          v-model="orderedSongs"
+          v-model="orderedItems"
           item-key="id"
           handle=".sidebar-song-handle"
           :animation="150"
           class="space-y-1"
           @end="onReorder"
         >
-          <template #item="{ element: song, index: idx }">
-            <div v-show="isSongVisible(song)" class="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gray-800/60 border border-gray-700/50">
+          <template #item="{ element: item, index: idx }">
+            <div
+              class="flex items-center gap-2 px-2 py-1.5 rounded-lg"
+              :class="item._type === 'section' ? 'bg-amber-900/20 border border-amber-700/40' : 'bg-gray-800/60 border border-gray-700/50'"
+              v-show="item._type === 'section' || isSongVisible(item)"
+            >
               <div class="sidebar-song-handle cursor-grab text-gray-500 hover:text-gray-300 flex items-center">
                 <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="currentColor" aria-hidden="true">
                   <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
@@ -243,8 +316,14 @@
                   <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
                 </svg>
               </div>
-              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-brand-700 text-[10px] font-bold text-white flex-shrink-0">{{ idx + 1 }}</span>
-              <span class="text-sm truncate" :class="song.is_cancelled ? 'line-through text-gray-500' : 'text-gray-200'">{{ song.title }}</span>
+              <template v-if="item._type === 'section'">
+                <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-700 text-[10px] font-bold text-white flex-shrink-0">§</span>
+                <span class="text-sm truncate text-amber-200">{{ item.name }}</span>
+              </template>
+              <template v-else>
+                <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-brand-700 text-[10px] font-bold text-white flex-shrink-0">{{ songDisplayIndex(item) }}</span>
+                <span class="text-sm truncate" :class="item.is_cancelled ? 'line-through text-gray-500' : 'text-gray-200'">{{ item.title }}</span>
+              </template>
             </div>
           </template>
         </draggable>
@@ -312,11 +391,73 @@
         </div>
       </div>
     </div>
+
+    <!-- Add Setlist Section Modal -->
+    <div
+      v-if="showAddSetlistSection"
+      class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      @click.self="showAddSetlistSection = false"
+    >
+      <div class="w-full max-w-md card border border-gray-600">
+        <h2 class="text-lg font-bold mb-3">Add Section</h2>
+        <div class="mb-3">
+          <label class="block text-[11px] uppercase tracking-wide text-gray-500 mb-1">Name</label>
+          <input
+            ref="setlistSectionInputRef"
+            v-model="newSetlistSectionName"
+            type="text"
+            class="input-field"
+            placeholder="e.g. Break, Speech…"
+            maxlength="50"
+            @keydown.enter="handleCreateSetlistSection"
+          />
+        </div>
+        <div class="mb-4">
+          <p class="text-[11px] uppercase tracking-wide text-gray-500 mb-2">Quick add:</p>
+          <div class="flex flex-wrap gap-1.5">
+            <button
+              v-for="preset in setlistSectionPresets"
+              :key="preset"
+              class="text-xs px-2.5 py-1 rounded-full bg-gray-800 border border-gray-700 text-gray-300 hover:border-brand-500 hover:text-white transition-colors"
+              @click="newSetlistSectionName = preset"
+            >
+              {{ preset }}
+            </button>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button class="btn-secondary text-sm" @click="showAddSetlistSection = false">Cancel</button>
+          <button class="btn-primary text-sm" :disabled="!newSetlistSectionName.trim() || creatingSetlistSection" @click="handleCreateSetlistSection">
+            {{ creatingSetlistSection ? 'Adding…' : 'Add section' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Setlist Section Confirmation -->
+    <div
+      v-if="setlistSectionToDelete"
+      class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      @click.self="setlistSectionToDelete = null"
+    >
+      <div class="w-full max-w-sm card border border-red-700/60">
+        <h2 class="text-lg font-bold mb-2">Delete section?</h2>
+        <p class="text-sm text-gray-300 mb-4">
+          Remove <span class="font-semibold text-white">"{{ setlistSectionToDelete.name }}"</span> from the setlist?
+        </p>
+        <div class="flex justify-end gap-2">
+          <button class="btn-secondary text-sm" @click="setlistSectionToDelete = null">Cancel</button>
+          <button class="text-sm px-3 py-1.5 rounded bg-red-600 hover:bg-red-500 text-white font-medium" @click="handleDeleteSetlistSection">
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
   </AppLayout>
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import draggable from 'vuedraggable'
@@ -336,16 +477,28 @@ const arrangementStore = useArrangementStore()
 
 const { currentGig: gig } = storeToRefs(gigStore)
 const { songs } = storeToRefs(songStore)
-const { roles } = storeToRefs(arrangementStore)
+const { roles, setlistSections } = storeToRefs(arrangementStore)
 const loading = ref(true)
 const loadError = ref('')
 const copyStatus = ref('idle')
 let copyStatusTimer = null
 
-// ─── Ordered songs (drag-and-drop) ───────────────────────────────────────────
-const orderedSongs = ref([])
+// ─── Ordered items (songs + setlist sections, unified drag-and-drop) ─────────
+const orderedItems = ref([])
+const orderedSongs = computed(() => orderedItems.value.filter((i) => i._type !== 'section'))
 const finalizedSongs = computed(() => orderedSongs.value.filter((song) => !song.is_cancelled))
 const canceledSongs = computed(() => orderedSongs.value.filter((song) => song.is_cancelled))
+
+function songDisplayIndex(item) {
+  // Show the song's 1-based index among non-section items only
+  let count = 0
+  for (const i of orderedItems.value) {
+    if (i._type === 'section') continue
+    count++
+    if (i.id === item.id) return count
+  }
+  return '?'
+}
 
 function initOrder() {
   const sorted = [...songs.value].sort((a, b) => {
@@ -354,13 +507,32 @@ function initOrder() {
     if (b.setlist_order != null) return 1
     return b.score - a.score
   })
-  orderedSongs.value = sorted
+  // Tag songs
+  const taggedSongs = sorted.map((s) => ({ ...s, _type: 'song' }))
+  // Tag sections
+  const taggedSections = setlistSections.value.map((s) => ({ ...s, _type: 'section' }))
+  // Merge by setlist_order
+  const all = [...taggedSongs, ...taggedSections].sort((a, b) => {
+    const orderA = a._type === 'section' ? a.setlist_order : a.setlist_order
+    const orderB = b._type === 'section' ? b.setlist_order : b.setlist_order
+    if (orderA != null && orderB != null) return orderA - orderB
+    if (orderA != null) return -1
+    if (orderB != null) return 1
+    return 0
+  })
+  orderedItems.value = all
 }
 
 async function onReorder() {
-  const updates = orderedSongs.value.map((s, i) =>
-    songStore.updateSetlistFields(s.id, { setlist_order: i })
-  )
+  const updates = []
+  for (let i = 0; i < orderedItems.value.length; i++) {
+    const item = orderedItems.value[i]
+    if (item._type === 'section') {
+      updates.push(arrangementStore.updateSetlistSection(item.id, { setlist_order: i }))
+    } else {
+      updates.push(songStore.updateSetlistFields(item.id, { setlist_order: i }))
+    }
+  }
   await Promise.all(updates)
 }
 
@@ -460,7 +632,11 @@ function goToArrangement(songId) {
 }
 
 async function toggleCancelled(song) {
-  await songStore.updateSetlistFields(song.id, { is_cancelled: !song.is_cancelled })
+  const newVal = !song.is_cancelled
+  await songStore.updateSetlistFields(song.id, { is_cancelled: newVal })
+  // Update local orderedItems copy
+  const item = orderedItems.value.find((i) => i.id === song.id)
+  if (item) item.is_cancelled = newVal
 }
 
 // ─── Computed ──────────────────────────────────────────────────────────────────
@@ -566,6 +742,94 @@ const leastEngagedSong = computed(() => {
 const leastEngagedInteractions = computed(() => socialInteractionCount(leastEngagedSong.value))
 const leastEngagedScore = computed(() => leastEngagedSong.value?.score || 0)
 
+// ─── Setlist Sections ─────────────────────────────────────────────────────────
+const showAddSetlistSection = ref(false)
+const newSetlistSectionName = ref('')
+const creatingSetlistSection = ref(false)
+const setlistSectionInputRef = ref(null)
+const setlistSectionPresets = ['Break', 'Speech', 'Soundcheck', 'Encore', 'Intermission']
+
+const editingSetlistSectionId = ref(null)
+const editSetlistSectionName = ref('')
+const setlistSectionNameInput = ref(null)
+
+const editingSetlistSectionNotesId = ref(null)
+const editSetlistSectionNotes = ref('')
+const setlistSectionNotesInput = ref(null)
+
+const setlistSectionToDelete = ref(null)
+
+watch(showAddSetlistSection, (val) => {
+  if (val) {
+    newSetlistSectionName.value = ''
+    nextTick(() => setlistSectionInputRef.value?.focus())
+  }
+})
+
+async function handleCreateSetlistSection() {
+  if (!newSetlistSectionName.value.trim()) return
+  creatingSetlistSection.value = true
+  try {
+    const order = orderedItems.value.length
+    const created = await arrangementStore.createSetlistSection(gigId, newSetlistSectionName.value, order)
+    orderedItems.value.push({ ...created, _type: 'section' })
+    showAddSetlistSection.value = false
+  } catch (e) {
+    console.error('Create setlist section error:', e)
+  } finally {
+    creatingSetlistSection.value = false
+  }
+}
+
+function startSetlistSectionRename(section) {
+  editingSetlistSectionId.value = section.id
+  editSetlistSectionName.value = section.name
+  nextTick(() => {
+    const input = setlistSectionNameInput.value
+    if (Array.isArray(input)) input[0]?.focus()
+    else input?.focus()
+  })
+}
+
+async function saveSetlistSectionRename(section) {
+  const newName = editSetlistSectionName.value.trim()
+  editingSetlistSectionId.value = null
+  if (!newName || newName === section.name) return
+  await arrangementStore.updateSetlistSection(section.id, { name: newName })
+  const item = orderedItems.value.find((i) => i.id === section.id)
+  if (item) item.name = newName
+}
+
+function startEditSetlistSectionNotes(section) {
+  editingSetlistSectionNotesId.value = section.id
+  editSetlistSectionNotes.value = section.notes || ''
+  nextTick(() => {
+    const input = setlistSectionNotesInput.value
+    if (Array.isArray(input)) input[0]?.focus()
+    else input?.focus()
+  })
+}
+
+async function saveSetlistSectionNotes(section) {
+  const notes = editSetlistSectionNotes.value.trim() || null
+  editingSetlistSectionNotesId.value = null
+  await arrangementStore.updateSetlistSection(section.id, { notes })
+  const item = orderedItems.value.find((i) => i.id === section.id)
+  if (item) item.notes = notes
+}
+
+function confirmDeleteSetlistSection(section) {
+  setlistSectionToDelete.value = section
+}
+
+async function handleDeleteSetlistSection() {
+  const section = setlistSectionToDelete.value
+  setlistSectionToDelete.value = null
+  if (!section) return
+  await arrangementStore.deleteSetlistSection(section.id)
+  orderedItems.value = orderedItems.value.filter((i) => i.id !== section.id)
+}
+
 function buildSummaryText() {
   const lines = [
     `Final Setlist: ${gig.value?.name || 'Untitled gig'}`,
@@ -573,17 +837,26 @@ function buildSummaryText() {
     '',
   ]
 
-  if (!finalizedSongs.value.length) {
+  if (!orderedItems.value.length) {
     lines.push('No songs in this setlist yet.')
     return lines.join('\n')
   }
 
-  for (const [index, song] of finalizedSongs.value.entries()) {
-    const meta = []
-    if (song.song_key) meta.push(`Key: ${song.song_key}`)
-    if (song.bpm) meta.push(`BPM: ${song.bpm}`)
-    const suffix = meta.length ? `  [${meta.join(' | ')}]` : ''
-    lines.push(`${index + 1}. ${song.title} - ${song.artist}${suffix}`)
+  let songIndex = 0
+  for (const item of orderedItems.value) {
+    if (item._type === 'section') {
+      lines.push('')
+      lines.push(`--- ${item.name} ---`)
+      if (item.notes) lines.push(`    ${item.notes}`)
+    } else {
+      if (item.is_cancelled) continue
+      songIndex++
+      const meta = []
+      if (item.song_key) meta.push(`Key: ${item.song_key}`)
+      if (item.bpm) meta.push(`BPM: ${item.bpm}`)
+      const suffix = meta.length ? `  [${meta.join(' | ')}]` : ''
+      lines.push(`${songIndex}. ${item.title} - ${item.artist}${suffix}`)
+    }
   }
 
   return lines.join('\n').trimEnd()
@@ -635,6 +908,7 @@ onMounted(async () => {
       gigStore.fetchGig(gigId),
       songStore.fetchSongs(gigId),
       arrangementStore.fetchRoles(gigId),
+      arrangementStore.fetchSetlistSections(gigId),
     ])
     initOrder()
   } catch (e) {

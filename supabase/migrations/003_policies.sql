@@ -13,7 +13,8 @@ begin
       and tablename in (
         'profiles','gigs','gig_members','songs','votes',
         'reactions','comments','user_notifications','folders',
-        'folder_gigs','gig_roles','arrangement_sections','arrangement_entries'
+        'folder_gigs','gig_roles','arrangement_sections','arrangement_entries',
+        'setlist_sections'
       )
   loop
     execute format('drop policy if exists %I on public.%I', pol.policyname, pol.tablename);
@@ -448,3 +449,24 @@ create policy "Gig members can delete arrangement entries"
         and public.is_gig_member(s.gig_id)
     )
   );
+
+-- ─── Setlist Sections ───────────────────────────────────────────────────────
+create policy "Gig members can view setlist sections"
+  on public.setlist_sections for select
+  to authenticated
+  using (public.is_gig_member(gig_id));
+
+create policy "Gig members can create setlist sections"
+  on public.setlist_sections for insert
+  to authenticated
+  with check (public.is_gig_member(gig_id));
+
+create policy "Gig members can update setlist sections"
+  on public.setlist_sections for update
+  to authenticated
+  using (public.is_gig_member(gig_id));
+
+create policy "Gig members can delete setlist sections"
+  on public.setlist_sections for delete
+  to authenticated
+  using (public.is_gig_member(gig_id));
